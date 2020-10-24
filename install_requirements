@@ -1,0 +1,12 @@
+#!/bin/bash
+
+for dep in deps/* ; do
+    echo "install ${dep} requirements..."
+    pip install -r ${dep}/requirements.txt
+
+    echo "install ${dep}..."
+    pip install ${dep}
+done
+
+echo "install ${PWD##*/}"
+pip install -r requirements.txt

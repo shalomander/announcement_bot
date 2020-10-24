@@ -1,0 +1,30 @@
+[main]
+dev = 1
+host = 127.0.0.1
+port = 0000
+alias = repost_bot.bots-X01.mbot
+
+[tarantool]
+host = 127.0.0.1
+port = 3301
+
+[icq_bot]
+token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+owner=xxxxxxxxx
+poll_time_s=300
+task_timeout_s=60
+request_timeout_s=7
+task_max_len=1000000000
+time_sleep=30
+api=https://api.icq.net/bot/v1
+bot_name=MyBot
+
+[ctlr]
+host=127.0.0.1
+port=0000
+
+[graphite]
+enable=1
+server=graphite-clickhouse.ivip.icq.com
+port=3003
+prefix=icqweb

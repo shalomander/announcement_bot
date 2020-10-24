@@ -1,0 +1,12 @@
+mailru_im_async_bot/__pycache__
+.idea/
+__pycache__/
+build/
+config.ini
+dist/
+example/__pycache__/
+handlers.py
+logging.ini
+mailru_im_async_bot.egg-info/
+test_bot.py
+/venv*

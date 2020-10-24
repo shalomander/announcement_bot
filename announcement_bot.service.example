@@ -1,0 +1,11 @@
+[Unit]
+Description=announcement_bot
+After=multi-user.target
+
+[Service]
+Restart=always
+Type=idle
+ExecStart=/usr/local/share/announcement_bot/venv/bin/python /usr/local/share/announcement_bot/announcement_bot.py /usr/local/etc/announcement_bot/
+
+[Install]
+WantedBy=multi-user.target

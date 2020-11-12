@@ -8,17 +8,13 @@ from config import (
     BOT_SPACE_NAME,
     USER_SPACE_NAME,
     ADMIN_SPACE_NAME,
-    LINK_ICQ
+    LINK_ICQ, MESSAGES_SPACE_NAME
 )
 from response import start_message_inline_bot
 from tarantool_utils import (
     select, insert, replace, select_index, delete
 )
-from utilities import (
-    is_admin_active, switch_admin_status, change_index_tuple_admin, set_null_admin_tuple,
-    change_anonymous_status, parse_group_link, ltrim, switch_inline_status, str_to_bool, parse_callback_name,
-    extract_username
-)
+import utilities as util
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +33,7 @@ class CallBackMiddlewareBase(ABC):
         :return:
         """
 
-        callback_data = parse_callback_name(callback_name)
+        callback_data = util.parse_callback_name(callback_name)
 
         self.bot = bot
         self.user_id = user_id
@@ -46,13 +42,13 @@ class CallBackMiddlewareBase(ABC):
         self.kwargs = kwargs
         self.callback_params = callback_data['params']
         self.event_data = self.kwargs['event'].data if 'event' in self.kwargs else []
-        self.username = extract_username(self.event_data)
+        self.username = util.extract_username(self.event_data)
         print()
         try:
             await getattr(self, self.callback_name)()
             await self.set_null_callback()
-        except AttributeError:
-            log.error("AttributeError in callback_middleware")
+        except AttributeError as e:
+            log.error(f"AttributeError in callback_middleware: {e}")
 
     async def set_null_callback(self):
         """
@@ -184,8 +180,8 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         переключение статуса пересылки
         :return:
         """
-        switch_inline_status(self.bot.name)
-        is_active = is_admin_active(
+        util.switch_inline_status(self.bot.name)
+        is_active = util.is_admin_active(
             self.user_id, self.bot.name
         )
         if is_active:
@@ -217,7 +213,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         Подтверждение смены статуса активности для пользователя
         :return: None
         """
-        message = switch_admin_status(
+        message = util.switch_admin_status(
             self.user_id, self.bot.name
         )
 
@@ -232,7 +228,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         """
 
         try:
-            change_index_tuple_admin(self.user_id, self.bot.name, {
+            util.change_index_tuple_admin(self.user_id, self.bot.name, {
                 '3': "change_start_message",
                 "4": 1
             })
@@ -273,7 +269,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
 
             replace(BOT_SPACE_NAME, bot_info)
 
-            change_index_tuple_admin(self.user_id, self.bot.name, {
+            util.change_index_tuple_admin(self.user_id, self.bot.name, {
                 "3": "",
                 "4": 1,
                 "5": ""
@@ -380,7 +376,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         if message_type == 'mention':
             admin_id = event_data['parts'][0]['payload']['userId']
         else:
-            link = parse_group_link(event_data['text'])
+            link = util.parse_group_link(event_data['text'])
         if edit_mode == 'add':
             await self.add_admin(admin_id)
         elif edit_mode == 'add_group':
@@ -432,7 +428,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         добавление новой группы админов
         :return:
         """
-        group_id = ltrim(new_group_link, 'https://icq.im/')
+        group_id = util.ltrim(new_group_link, 'https://icq.im/')
         response = await self.bot.get_chat_info(group_id)
         if response.get("ok"):
             try:
@@ -534,7 +530,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         :return:
         """
 
-        change_index_tuple_admin(self.user_id, self.bot.name, {
+        util.change_index_tuple_admin(self.user_id, self.bot.name, {
             '3': "set_icq_channel",
             "4": 1
         })
@@ -599,7 +595,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                     ])
                 )
             else:
-                set_null_admin_tuple(self.user_id, self.bot.name)
+                util.set_null_admin_tuple(self.user_id, self.bot.name)
                 bot_info = select_index(BOT_SPACE_NAME, self.bot.name, index='bot')[0]
                 bot_info[-1] = icq_channel
                 replace(BOT_SPACE_NAME, bot_info)
@@ -624,8 +620,8 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         Установка отправки сообщений пользователя в анонимном режиме
         :return:
         """
-        is_anon = str_to_bool(self.callback_params[0])
-        change_anonymous_status(self.user_id, is_anon)
+        is_anon = util.str_to_bool(self.callback_params[0])
+        util.change_anonymous_status(self.user_id, is_anon)
         if is_anon:
             text = "Включен анонимный режим. Все следующие сообщения будут отправлены анонимно"
             callback_text = "Отключить"
@@ -647,7 +643,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         Установка отправки сообщений пользователя в анонимном режиме
         :return:
         """
-        change_anonymous_status(self.user_id, True)
+        util.change_anonymous_status(self.user_id, True)
         await self.bot.send_text(
             self.user_id,
             text=(
@@ -664,7 +660,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         Установка отправки сообщений пользователя в анонимном режиме
         :return:
         """
-        change_anonymous_status(self.user_id, False)
+        util.change_anonymous_status(self.user_id, False)
         await self.bot.send_text(
             self.user_id,
             text=(
@@ -682,45 +678,69 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         :return:
         """
         try:
-            icq_channel = select_index(BOT_SPACE_NAME, self.bot.name, index='bot')[0][-1]
+            icq_channel = util.get_bot_channel(self.bot.name)
             original_msg_id = self.callback_params[0]
-            forward_data = select('messages', original_msg_id)[0]
-            text = self.kwargs.get('text')
-            await self.bot.send_text(
-                chat_id=icq_channel,
-                text=text
-            )
-            if forward_data:
-                for forwarded_id in forward_data[1]:
-                    await self.bot.edit_text(
-                        chat_id=forwarded_id[0],
-                        msg_id=forwarded_id[1],
-                        text=text,
-                        inline_keyboard_markup=json.dumps([
-                            [{"text": "✅ Опубликовано", "callbackData": "callback_ignore"}],
-                        ])
+            if 'parts' in self.event_data['message']:
+                text = self.event_data['message']['parts'][0]['payload']['message']['text']
+
+                # send original text to target channel
+                target_msg = await self.bot.send_text(
+                    chat_id=icq_channel,
+                    text=text
+                )
+
+                # forward original message to admins
+                admins = util.get_admins(self.bot.name)
+                forwarded_id = []
+                for admin in admins:
+                    admin_id = admin[0]
+                    message_obj = await self.bot.send_text(
+                        chat_id=admin_id,
+                        forward_chat_id=self.user_id,
+                        forward_msg_id=original_msg_id
                     )
-        except IndexError:
-            pass
-        finally:
-            await self.set_null_callback()
+                    forwarded_id.append((admin_id, message_obj.get('msgId')))
+                insert(MESSAGES_SPACE_NAME, (
+                    original_msg_id, forwarded_id
+                ))
+
+                # edit replied message
+                replied_id = self.event_data['message']['msgId']
+                inline_keyboard = [
+                    [{"text": "Закрепить в чате?", "callbackData": f"callback_pin_msg-{target_msg.get('msgId')}"}],
+                    [{"text": "Отмена", "callbackData": f"callback_disable_buttons-{replied_id}"}],
+                ]
+                self.bot.edit_text(
+                    msg_id=replied_id,
+                    text="Опубликовано! Уведомление о публикации отправлено всем админам",
+                    inline_keyboard_markup=json.dumps(inline_keyboard)
+                )
+
+        except IndexError as e:
+            log.error(f"IndexError in callback_send_post: {e}")
 
     async def callback_delete_post(self):
         try:
-            text = f"Удалено @{self.username or self.user_id}"
-            original_msg_id = self.callback_params[0]
-            forward_data = select('messages', original_msg_id)[0]
-            if forward_data:
-                for forwarded_id in forward_data[1]:
-                    await self.bot.edit_text(
-                        chat_id=forwarded_id[0],
-                        msg_id=forwarded_id[1],
-                        text=text
-                    )
+            await self.bot.delete_messages(
+                    chat_id=self.user_id,
+                    msg_id=self.event_data['message']['msgId']
+                )
         except IndexError:
             pass
-        finally:
-            await self.set_null_callback()
+
+    async def callback_pin_msg(self):
+        try:
+            pin_msg_id = self.callback_params[0]
+            icq_channel = util.get_bot_channel(self.bot.name)
+
+            # pin target message
+            self.bot.pin_message(
+                chat_id=icq_channel,
+                msg_id=pin_msg_id
+            )
+
+        except IndexError:
+            pass
 
 
 callback_middleware_inline_bot = CallBackMiddlewareInlineBot()

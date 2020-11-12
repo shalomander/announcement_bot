@@ -13,7 +13,7 @@ from config import (
 log = logging.getLogger(__name__)
 
 
-def parse_bot_information(text: str) -> dict:
+def parse_bot_info(text: str) -> dict:
     bot_id = re.search(
         r"\d{9,10}", text
     )
@@ -159,3 +159,19 @@ async def validate_token(token) -> bool:
                 response_data = await response.json()
                 is_active = response_data['ok']
     return is_valid and is_active
+
+
+def is_admin(user_id, bot_name):
+    return tarantool.exist_index(
+        ADMIN_SPACE_NAME, (
+            user_id, bot_name
+        ), index='admin_bot'
+    )
+
+
+def get_admins(bot_name):
+    return tarantool.select_index(ADMIN_SPACE_NAME, bot_name, index='bot_nick')
+
+
+def get_bot_channel(bot_name):
+    return tarantool.select_index(BOT_SPACE_NAME, bot_name, index='bot')[0][-1]

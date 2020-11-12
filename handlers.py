@@ -19,14 +19,7 @@ from tarantool_utils import (
 from text_middleware import (
     text_middleware_inline_bot
 )
-from utilities import (
-    parse_bot_information,
-    get_hello_message,
-    is_admin_active,
-    switch_admin_status,
-    set_null_admin_tuple, extract_username,
-    validate_token
-)
+import utilities as util
 
 log = logging.getLogger(__name__)
 main_bot_callbacks = {}
@@ -114,9 +107,9 @@ async def message(bot, event):
         text = event.data['text']
 
     try:
-        secret_bot = parse_bot_information(text)
+        secret_bot = util.parse_bot_info(text)
         if 'token' in secret_bot:
-            if await validate_token(secret_bot['token']):
+            if await util.validate_token(secret_bot['token']):
                 replace(USER_SPACE_NAME, (
                     user,
                     secret_bot['token'], secret_bot['botId'], secret_bot['nick']
@@ -163,10 +156,10 @@ async def start_inline_message(bot, event):
         )[0][-2]
 
         if is_admin:
-            set_null_admin_tuple(
+            util.set_null_admin_tuple(
                 user_id, bot_name
             )
-            is_active = is_admin_active(
+            is_active = util.is_admin_active(
                 user_id, bot_name
             )
             if is_active:
@@ -220,7 +213,7 @@ async def start_inline_message(bot, event):
             callback = f"callback_switch_anonymous-{is_anon}"
             await bot.send_text(
                 chat_id=user_id,
-                text=get_hello_message(bot_name),
+                text=util.get_hello_message(bot_name),
                 inline_keyboard_markup=json.dumps([
                     [{"text": text, "callbackData": callback}],
                 ])
@@ -267,14 +260,10 @@ async def message_inline(bot, event):
     bot_name = bot.name
 
     user_id = event.data['from']['userId']
-    user_name = extract_username(event.data)
+    user_name = util.extract_username(event.data)
     message_id = event.data['msgId']
     text = event.data['text']
-    is_admin = exist_index(
-        ADMIN_SPACE_NAME, (
-            user_id, bot_name
-        ), index='admin_bot'
-    )
+    is_admin = util.is_admin(user_id, bot_name)
     if not text.startswith("/"):
         if is_admin:
             try:
@@ -287,35 +276,44 @@ async def message_inline(bot, event):
                     await text_middleware_inline_bot(
                         bot, user_id, message_id, quiz, text=text, step=step
                     )
-                if callback_middleware_inline_bot.is_edit_admin_enabled():
+                elif callback_middleware_inline_bot.is_edit_admin_enabled():
                     await callback_middleware_inline_bot.edit_admin(event.data)
             except IndexError:
                 pass
-
         else:
+            message_obj = await bot.send_text(
+                chat_id=user_id,
+                text=f"Что сделать с объявлением?",
+                reply_msg_id=message_id,
+                inline_keyboard_markup=json.dumps([
+                    [{"text": "Опубликовть", "callbackData": f"callback_send_post-{message_id}"}],
+                    [{"text": "Отмена", "callbackData": f"callback_delete_post"}],
+                ])
+            )
             admins = select_index(ADMIN_SPACE_NAME, bot_name, index='bot_nick')
 
             user = f"👤 @{user_name or user_id}"
 
             forwarded_id = []
 
-            for admin_info in admins:
-                active = admin_info[2]
-                if active:
-                    admin_id = admin_info[0]
-                    message_obj = await bot.send_text(
-                        chat_id=admin_id,
-                        text=f"{text}\n{user}",
-                        inline_keyboard_markup=json.dumps([
-                            [{"text": "Опубликовть", "callbackData": f"callback_send_post-{message_id}"}],
-                            [{"text": "Удалить", "callbackData": f"callback_delete_post-{message_id}"}],
-                        ])
-                    )
-                    forwarded_id.append((admin_id, message_obj.get('msgId')))
-
-            insert(MESSAGES_SPACE_NAME, (
-                message_id, forwarded_id
-            ))
+            # for admin_info in admins:
+            #     active = admin_info[2]
+            #     if active:
+            #         admin_id = admin_info[0]
+            #         message_obj = await bot.send_text(
+            #             chat_id=admin_id,
+            #             text=f"Что сделать с объявлением?",
+            #             reply_msg_id=message_id,
+            #             inline_keyboard_markup=json.dumps([
+            #                 [{"text": "Опубликовть", "callbackData": f"callback_send_post-{message_id}"}],
+            #                 [{"text": "Отмена", "callbackData": f"callback_delete_post-{message_id}"}],
+            #             ])
+            #         )
+            #         forwarded_id.append((admin_id, message_obj.get('msgId')))
+            #
+            # insert(MESSAGES_SPACE_NAME, (
+            #     message_id, forwarded_id
+            # ))
 
 
 async def on_bot_for_admin(bot, event):
@@ -350,7 +348,7 @@ async def sub_on_off(bot, event):
     )
 
     if is_admin:
-        messages = switch_admin_status(
+        messages = util.switch_admin_status(
             user_id, bot_name
         )
 

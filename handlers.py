@@ -278,42 +278,33 @@ async def message_inline(bot, event):
                     )
                 elif callback_middleware_inline_bot.is_edit_admin_enabled():
                     await callback_middleware_inline_bot.edit_admin(event.data)
+                elif not util.get_bot_channel(bot_name):
+                    await bot.send_text(
+                        chat_id=user_id,
+                        text="⚠️ Чтобы в группу или канал начали публиковываться объявления,"
+                             " нужно сначала его Настроить",
+                        inline_keyboard_markup=json.dumps([
+                            [{"text": "Настроить объявления", "callbackData": f"callback_check_icq_channel"}]
+                        ])
+                    )
+                else:
+                    # reply message with control buttons
+                    await bot.send_text(
+                        chat_id=user_id,
+                        text="Что сделать с объявлением?",
+                        reply_msg_id=message_id,
+                        inline_keyboard_markup=json.dumps([
+                            [{"text": "Опубликовть", "callbackData": f"callback_send_post-{message_id}"}],
+                            [{"text": "Отмена", "callbackData": f"callback_delete_post"}],
+                        ])
+                    )
             except IndexError:
                 pass
         else:
-            message_obj = await bot.send_text(
+            await bot.send_text(
                 chat_id=user_id,
-                text=f"Что сделать с объявлением?",
-                reply_msg_id=message_id,
-                inline_keyboard_markup=json.dumps([
-                    [{"text": "Опубликовть", "callbackData": f"callback_send_post-{message_id}"}],
-                    [{"text": "Отмена", "callbackData": f"callback_delete_post"}],
-                ])
+                text="Вы не являетесь админом"
             )
-            admins = select_index(ADMIN_SPACE_NAME, bot_name, index='bot_nick')
-
-            user = f"👤 @{user_name or user_id}"
-
-            forwarded_id = []
-
-            # for admin_info in admins:
-            #     active = admin_info[2]
-            #     if active:
-            #         admin_id = admin_info[0]
-            #         message_obj = await bot.send_text(
-            #             chat_id=admin_id,
-            #             text=f"Что сделать с объявлением?",
-            #             reply_msg_id=message_id,
-            #             inline_keyboard_markup=json.dumps([
-            #                 [{"text": "Опубликовть", "callbackData": f"callback_send_post-{message_id}"}],
-            #                 [{"text": "Отмена", "callbackData": f"callback_delete_post-{message_id}"}],
-            #             ])
-            #         )
-            #         forwarded_id.append((admin_id, message_obj.get('msgId')))
-            #
-            # insert(MESSAGES_SPACE_NAME, (
-            #     message_id, forwarded_id
-            # ))
 
 
 async def on_bot_for_admin(bot, event):

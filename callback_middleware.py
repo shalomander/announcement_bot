@@ -691,18 +691,14 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
 
                 # forward original message to admins
                 admins = util.get_admins(self.bot.name)
-                forwarded_id = []
+                admins.remove(self.user_id)
                 for admin in admins:
                     admin_id = admin[0]
-                    message_obj = await self.bot.send_text(
+                    await self.bot.send_text(
                         chat_id=admin_id,
                         forward_chat_id=self.user_id,
                         forward_msg_id=original_msg_id
                     )
-                    forwarded_id.append((admin_id, message_obj.get('msgId')))
-                insert(MESSAGES_SPACE_NAME, (
-                    original_msg_id, forwarded_id
-                ))
 
                 # edit replied message
                 replied_id = self.event_data['message']['msgId']
@@ -739,8 +735,39 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 msg_id=pin_msg_id
             )
 
+            # send notification to other admins
+            admins = util.get_admins(self.bot.name)
+            admins.remove(self.user_id)
+            for admin in admins:
+                admin_id = admin[0]
+                await self.bot.send_text(
+                    chat_id=admin_id,
+                    forward_chat_id=self.user_id,
+                    forward_msg_id=pin_msg_id,
+                    text=f"Сообщение закреплено Админом @{self.username}"
+                )
+
+            # edit controls in replied message
+            replied_id = self.event_data['message']['msgId']
+            inline_keyboard = []
+            self.bot.edit_text(
+                msg_id=replied_id,
+                text="Закреплено в чате! Уведомление отправлено всем админам",
+                inline_keyboard_markup=json.dumps(inline_keyboard)
+            )
+
         except IndexError:
             pass
+
+    async def callback_disable_buttons(self):
+        replied_id = self.event_data['message']['msgId']
+        text = self.event_data['message']['text']
+        inline_keyboard = []
+        self.bot.edit_text(
+            msg_id=replied_id,
+            text=text,
+            inline_keyboard_markup=json.dumps(inline_keyboard)
+        )
 
 
 callback_middleware_inline_bot = CallBackMiddlewareInlineBot()

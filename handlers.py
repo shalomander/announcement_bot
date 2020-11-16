@@ -278,6 +278,8 @@ async def message_inline(bot, event):
                     )
                 elif callback_middleware_inline_bot.is_edit_admin_enabled():
                     await callback_middleware_inline_bot.edit_admin(event.data)
+                elif callback_middleware_inline_bot.is_edit_msg_enabled():
+                    await callback_middleware_inline_bot.edit_message(event.data)
                 elif not util.get_bot_channel(bot_name):
                     await bot.send_text(
                         chat_id=user_id,
@@ -289,15 +291,8 @@ async def message_inline(bot, event):
                     )
                 else:
                     # reply message with control buttons
-                    await bot.send_text(
-                        chat_id=user_id,
-                        text="Что сделать с объявлением?",
-                        reply_msg_id=message_id,
-                        inline_keyboard_markup=json.dumps([
-                            [{"text": "Опубликовть", "callbackData": f"callback_send_post-{message_id}"}],
-                            [{"text": "Отмена", "callbackData": f"callback_delete_post"}],
-                        ])
-                    )
+                    await callback_middleware_inline_bot.callback_reply_message()
+
             except IndexError:
                 pass
         else:
@@ -328,7 +323,6 @@ async def off_bot_for_admin(bot, event):
 
 
 async def sub_on_off(bot, event):
-
     bot_name = bot.name
     user_id = event.data['from']['userId']
 

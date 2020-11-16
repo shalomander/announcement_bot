@@ -116,7 +116,19 @@ box.once("create_v0.0.1", function()
         if_not_exists = true,
         unique=false
     })
+    box.schema.space.create('channel_messages', {
+        if_not_exists = true,
+        format={
+             {name = 'msg_id', type = 'string'},
+        }
+    })
 
+    box.space.channel_messages:create_index('msg_id', {
+        type = 'hash',
+        parts = {'msg_id'},
+        if_not_exists = true,
+        unique=true
+    })
 end
 )
 

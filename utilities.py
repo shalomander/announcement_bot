@@ -175,3 +175,21 @@ def get_admins(bot_name):
 
 def get_bot_channel(bot_name):
     return tarantool.select_index(BOT_SPACE_NAME, bot_name, index='bot')[0][-1]
+
+
+def has_parts(event):
+    return 'parts' in event.data
+
+
+def is_forwarded(event):
+    return has_parts(event) and event.data['parts'][0]['type'] == 'forward'
+
+
+def get_fwd_id(event):
+    return event.data['parts'][0]['payload']['message']['msgId']
+
+
+def is_fwd_from_channel(event):
+    return is_forwarded(event) and tarantool.exist_index('channel_messages',
+                                                         get_fwd_id(event),
+                                                         'msg_id')

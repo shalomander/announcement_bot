@@ -120,6 +120,7 @@ box.once("create_v0.0.1", function()
         if_not_exists = true,
         format={
              {name = 'msg_id', type = 'string'},
+             {name = 'text', type = 'string'},
         }
     })
 

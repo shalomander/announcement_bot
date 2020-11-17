@@ -9,12 +9,11 @@ from config import (
     ADMIN_SPACE_NAME,
     USER_SPACE_NAME,
     BOT_SPACE_NAME,
-    INLINE_USER_SETUP_SPACE_NAME,
-    MESSAGES_SPACE_NAME
+    INLINE_USER_SETUP_SPACE_NAME
 )
 from tarantool_utils import (
     replace, select_index, exist_index,
-    select, insert
+    select
 )
 from text_middleware import (
     text_middleware_inline_bot
@@ -151,9 +150,9 @@ async def start_inline_message(bot, event):
                 user_id, bot_name
             ), index='admin_bot'
         )
-        start_message = select_index(
-            BOT_SPACE_NAME, bot_name, index='bot'
-        )[0][-2]
+        # start_message = select_index(
+        #     BOT_SPACE_NAME, bot_name, index='bot'
+        # )[0][-2]
 
         if is_admin:
             util.set_null_admin_tuple(
@@ -260,7 +259,7 @@ async def message_inline(bot, event):
     bot_name = bot.name
 
     user_id = event.data['from']['userId']
-    user_name = util.extract_username(event.data)
+    # user_name = util.extract_username(event.data)
     message_id = event.data['msgId']
     text = event.data['text']
     is_admin = util.is_admin(user_id, bot_name)

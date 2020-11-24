@@ -174,7 +174,8 @@ def get_admins(bot_name):
 
 
 def get_bot_channel(bot_name):
-    return tarantool.select_index(BOT_SPACE_NAME, bot_name, index='bot')[0][-1]
+    bot_data = tarantool.select_index(BOT_SPACE_NAME, bot_name, index='bot')
+    return bot_data[0][6] if len(bot_data) else None
 
 
 def has_parts(event):

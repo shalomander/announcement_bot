@@ -78,7 +78,7 @@ def switch_admin_status(user_id, bot_name) -> str:
             "Ошибка при получении пользовательских настроек"
         )
     else:
-        return "Не активный" if is_admin_active else "Активный"
+        return "не активен" if is_admin_active else "активен"
 
 
 def switch_inline_status(bot_name):

@@ -109,7 +109,7 @@ class CallBackMiddleware(CallBackMiddlewareBase):
                 f"https://files.icq.net/get/0dUaY000WcqonvlVrDFAcS5ed264621ae\n"
                 f"7) Пришли аватарку для своего бота /setuserpic 👇\n"
                 f"https://files.icq.net/get/0dKj8000frHsEa2YyUS1zE5ed266211ae\n\n"
-                f"⚠️ Важно: перешли @{BOT_NAME} сообщение с данными о своем боте 👇\n"
+                f"⚠️ Важно: перешли @{self.bot.name} сообщение с данными о своем боте 👇\n"
                 f"https://files.icq.net/get/0aE48000e9N8zzuD0O1VBt5ed266931ae"
             )
         )
@@ -136,7 +136,7 @@ class CallBackMiddleware(CallBackMiddlewareBase):
             insert(ADMIN_SPACE_NAME, (
                 self.user_id, bot_nick, True, '', 0, ''
             ))
-            self.kwargs['bot_callbacks']['start'](bot_nick)
+            await self.kwargs['bot_callbacks']['start'](bot_nick)
 
         except DatabaseError:
             await self.bot.send_text(
@@ -366,7 +366,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             self.user_id,
             text=(
                 "Чтобы настроить пересылку свех сообщений в группу с админами:\n"
-                f"1) добавить @{BOT_NAME} в группу\n"
+                f"1) добавить @{self.bot.name} в группу\n"
                 "2) прислать сюда ссылку на группу"
             ),
             inline_keyboard_markup=json.dumps([
@@ -460,7 +460,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             self.user_id,
             text=(
                 "Ошибка настройки пересылки.\n\n"
-                f"Проверьте что ссылка валидна и что бот @{BOT_NAME} добавлен в группу и имеет право писать туда.\n"
+                f"Проверьте что ссылка валидна и что бот @{self.bot.name} добавлен в группу и имеет право писать туда.\n"
             ),
             inline_keyboard_markup=json.dumps([
                 [{"text": "Повторить", "callbackData": "reply_add_group"}],

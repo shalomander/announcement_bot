@@ -59,16 +59,19 @@ def role_change(current, new):
     else:
         if new == 'main':
             loop.create_task(bot.start_polling())
+            loop.create_task(update_bot_name(bot))
+            loop.create_task(start_all())
         else:
             loop.create_task(bot.stop_polling())
         log.info(f"role was change from {current} to {new}")
 
 
-def start_bot(bot_nick, bot_data=None):
+async def start_bot(bot_nick, bot_data=None):
     bot_data = bot_data or tarantool.select_index(config.BOT_SPACE_NAME, bot_nick, index='bot')[0]
     _, bot_token, _, bot_name, _, _, _ = bot_data
     bot_instance = InlineAnnouncementBot(bot_token, bot_name)
     bot_instance.start()
+    await update_bot_name(bot_instance)
     if bot_instance.is_running:
         log.info(f"Success: {bot_name}\n")
         inline_bots[bot_name] = bot_instance
@@ -80,11 +83,11 @@ def stop_bot(bot_nick):
         bot_instance.stop()
 
 
-def start_all():
+async def start_all():
     log.info("\nStarting bots:\n")
     bots = tarantool.select(config.BOT_SPACE_NAME)
     for bot_data in bots:
-        start_bot(None, bot_data)
+        await start_bot(None, bot_data)
 
 
 def stop_all():
@@ -94,7 +97,12 @@ def stop_all():
         inline_bots.pop(key)
 
 
-start_all()
+async def update_bot_name(bot_instance: Bot):
+    bot_self = await bot_instance.self_get()
+    if bot_self.get("ok"):
+        bot_instance.name = bot_self.get('nick')
+
+
 main_bot_callbacks['start'] = start_bot
 
 

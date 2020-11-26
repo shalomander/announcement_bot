@@ -46,8 +46,8 @@ class CallBackMiddlewareBase(ABC):
         self.username = util.extract_username(self.event_data)
         print()
         try:
-            await getattr(self, self.callback_name)()
-            await self.set_null_callback()
+            coro = await getattr(self, self.callback_name)()
+            await self.set_null_callback() if not coro else await coro
         except AttributeError as e:
             log.error(f"AttributeError in callback_middleware: {e}")
 
@@ -185,33 +185,68 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         переключение статуса пересылки
         :return:
         """
-        util.switch_inline_status(self.bot.name)
+        new_bot_state = self.callback_params[0] if len(self.callback_params) else None
+        util.switch_inline_status(self.bot.name, util.str_to_bool(new_bot_state))
+        msg_id = self.event['message']['msgId']
+        chat_id = self.event['message']['chat']['chatId']
+        msg_text = self.event['message']['text']
+        buttons = self.event['message']['parts'][0]['payload']
         is_active = util.is_admin_active(
             self.user_id, self.bot.name
         )
+
         if is_active:
-            message = (
-                f"Теперь сообщения, которые подписчики написали "
-                f"@{self.bot.name} начнут приходить и вам Остановить получение "
-                f"сообщений можно командой /off или по кнопке “Выключить”"
-            )
-            switch_button_text = 'Выключить'
+            admin_message = f"Админ @{self.username} включил бота"
+            callback_message = "Бот включен"
+            switch_button_text = '⛔ ️Выключить'
+            switch_button_action = 'disable'
+
         else:
-            message = (
-                "Получение сообщений для вас отключено. Сообщения которые "
-                "пользователи будут отправлять в бота будут утеряны"
-            )
-            switch_button_text = 'Включить обратно'
-        inline_keyboard = [
-            [{"text": f"{switch_button_text}", "callbackData": "callback_switch_inline"}],
-            [{"text": "Назад", "callbackData": "start_inline_message"}],
-        ]
-        await self.bot.send_text(
-            chat_id=self.user_id,
-            text=message,
-            inline_keyboard_markup=json.dumps(inline_keyboard)
+            admin_message = f"Админ @{self.username} выключил бота"
+            callback_message = "Бот выключен"
+            switch_button_text = 'Включить'
+            switch_button_action = 'enable'
+
+        buttons[-1] = [
+            {"text": f"{switch_button_text}", "callbackData": f"callback_switch_inline-{switch_button_action}"}]
+        await self.bot.edit_text(
+            chat_id=chat_id,
+            msg_id=msg_id,
+            text=msg_text,
+            inline_keyboard_markup=json.dumps(buttons)
         )
-        await self.set_null_callback()
+
+        # send notification to other admins
+        admins = util.get_admin_uids(self.bot.name)
+        admins.remove(self.user_id)
+        for admin in admins:
+            await self.bot.send_text(
+                chat_id=admin,
+                text=admin_message
+            )
+        # if is_active:
+        #     message = (
+        #         f"Теперь сообщения, которые подписчики написали "
+        #         f"@{self.bot.name}, начнут приходить и вам.\n"
+        #         "Остановить получение сообщений можно командой /off или по кнопке “Выключить”"
+        #     )
+        #     switch_button_text = 'Выключить'
+        # else:
+        #     message = (
+        #         "Получение сообщений для вас отключено. Сообщения? которые "
+        #         "пользователи будут отправлять в бота, будут утеряны"
+        #     )
+        #     switch_button_text = 'Включить обратно'
+        # inline_keyboard = [
+        #     [{"text": f"{switch_button_text}", "callbackData": "callback_switch_inline"}],
+        #     [{"text": "Назад", "callbackData": "start_inline_message"}],
+        # ]
+        # await self.bot.send_text(
+        #     chat_id=self.user_id,
+        #     text=message,
+        #     inline_keyboard_markup=json.dumps(inline_keyboard)
+        # )
+        return self.set_answer_callback(callback_message)
 
     async def callback_on_off_success(self):
         """
@@ -695,12 +730,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 insert('channel_messages', (target_msg.get('msgId'), text))
 
                 # forward original message to admins
-                admins = util.get_admins(self.bot.name)
+                admins = util.get_admin_uids(self.bot.name)
                 admins.remove(self.user_id)
                 for admin in admins:
-                    admin_id = admin[0]
                     await self.bot.send_text(
-                        chat_id=admin_id,
+                        chat_id=admin,
                         forward_chat_id=self.user_id,
                         forward_msg_id=original_msg_id
                     )
@@ -741,12 +775,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             )
 
             # forward notification to admins
-            admins = util.get_admins(self.bot.name)
+            admins = util.get_admin_uids(self.bot.name)
             admins.remove(self.user_id)
             for admin in admins:
-                admin_id = admin[0]
                 await self.bot.send_text(
-                    chat_id=admin_id,
+                    chat_id=admin,
                     text=f"@{self.username} удалил сообщение:\n"
                          f"{fwd_text}"
                 )
@@ -800,12 +833,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         upsert('channel_messages', (update_message_id, text), ((1, '=', text),))
 
         # forward original message to admins
-        admins = util.get_admins(self.bot.name)
+        admins = util.get_admin_uids(self.bot.name)
         admins.remove(self.user_id)
         for admin in admins:
-            admin_id = admin[0]
             await self.bot.send_text(
-                chat_id=admin_id,
+                chat_id=admin,
                 forward_chat_id=self.user_id,
                 forward_msg_id=self.event_data['parts'][0]['payload']['message']['msgId'],
                 text=f"Оригинальное сообщение:\n{old_text}"
@@ -835,12 +867,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             )
 
             # send notification to other admins
-            admins = util.get_admins(self.bot.name)
+            admins = util.get_admins_uids(self.bot.name)
             admins.remove(self.user_id)
             for admin in admins:
-                admin_id = admin[0]
                 await self.bot.send_text(
-                    chat_id=admin_id,
+                    chat_id=admin,
                     forward_chat_id=self.user_id,
                     forward_msg_id=pin_msg_id,
                     text=f"Сообщение закреплено Админом @{self.username}"

@@ -5,7 +5,6 @@ from callback_middleware import (
 )
 
 from config import (
-    BOT_NAME,
     ADMIN_SPACE_NAME,
     USER_SPACE_NAME,
     BOT_SPACE_NAME,
@@ -39,7 +38,9 @@ async def start(bot, event):
     replace(USER_SPACE_NAME, (
         USER_SPACE_NAME, '', '', ''
     ))
-
+    inline_keyboard = [
+            [{"text": "🤖 Инструкция @metabot", "callbackData": "call_back_instruction"}]
+        ]
     await bot.send_text(
         chat_id=user,
         text=(
@@ -54,9 +55,8 @@ async def start(bot, event):
             "Сообщение выглядит примерно так:\n"
             "https://files.icq.net/get/0aE48000e9N8zzuD0O1VBt5ed266931ae"
         ),
-        inline_keyboard_markup="[{}]".format(json.dumps([
-            {"text": "🤖 Инструкция @metabot", "callbackData": "call_back_instruction"},
-        ])))
+        inline_keyboard_markup=json.dumps(inline_keyboard)
+    )
 
 
 async def callbacks(bot, event):
@@ -150,9 +150,6 @@ async def start_inline_message(bot, event):
                 user_id, bot_name
             ), index='admin_bot'
         )
-        # start_message = select_index(
-        #     BOT_SPACE_NAME, bot_name, index='bot'
-        # )[0][-2]
 
         if is_admin:
             util.set_null_admin_tuple(
@@ -163,9 +160,11 @@ async def start_inline_message(bot, event):
             )
             if is_active:
                 button = "⛔ ️Выключить"
+                button_action = 'disable'
                 message_active = f'Остановить бота можно командой /off или по кнопке "{button}"'
             else:
                 button = "Включить"
+                button_action = 'enable'
                 message_active = f'Включить бота можно командой /on или по кнопке "{button}"'
 
             icq_channel = select_index(BOT_SPACE_NAME, bot_name, index='bot')[0][-1]
@@ -187,7 +186,7 @@ async def start_inline_message(bot, event):
                     inline_keyboard_markup=json.dumps([
                         [{"text": "Настроить объявления", "callbackData": "callback_check_icq_channel"}],
                         [{"text": "Настроить админов", "callbackData": "callback_config_reply"}],
-                        [{"text": f"{button}", "callbackData": "callback_switch_inline"}],
+                        [{"text": f"{button}", "callbackData": f"callback_switch_inline-{button_action}"}],
                     ])
                 )
             else:
@@ -259,7 +258,6 @@ async def message_inline(bot, event):
     bot_name = bot.name
 
     user_id = event.data['from']['userId']
-    # user_name = util.extract_username(event.data)
     message_id = event.data['msgId']
     text = event.data['text']
     is_admin = util.is_admin(user_id, bot_name)

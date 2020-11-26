@@ -71,7 +71,7 @@ async def start_bot(bot_nick, bot_data=None):
     _, bot_token, _, bot_name, _, _, _ = bot_data
     bot_instance = InlineAnnouncementBot(bot_token, bot_name)
     bot_instance.start()
-    await update_bot_name(bot_instance)
+    await update_bot_name(bot_instance.bot)
     if bot_instance.is_running:
         log.info(f"Success: {bot_name}\n")
         inline_bots[bot_name] = bot_instance

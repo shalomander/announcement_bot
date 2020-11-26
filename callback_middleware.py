@@ -185,32 +185,65 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         переключение статуса пересылки
         :return:
         """
-        util.switch_inline_status(self.bot.name)
+        new_bot_state = self.callback_params[0] if len(self.callback_params) else None
+        util.switch_inline_status(self.bot.name, util.str_to_bool(new_bot_state))
+        msg_id = self.event['message']['msgId']
+        chat_id = self.event['message']['chat']['chatId']
+        msg_text = self.event['message']['text']
+        buttons = self.event['message']['parts'][0]['payload']
         is_active = util.is_admin_active(
             self.user_id, self.bot.name
         )
+
         if is_active:
-            message = (
-                f"Теперь сообщения, которые подписчики написали "
-                f"@{self.bot.name} начнут приходить и вам Остановить получение "
-                f"сообщений можно командой /off или по кнопке “Выключить”"
-            )
-            switch_button_text = 'Выключить'
+            admin_message = f"Админ @{self.username} включил бота"
+            switch_button_text = '⛔ ️Выключить'
+            switch_button_action = 'disable'
         else:
-            message = (
-                "Получение сообщений для вас отключено. Сообщения которые "
-                "пользователи будут отправлять в бота будут утеряны"
-            )
-            switch_button_text = 'Включить обратно'
-        inline_keyboard = [
-            [{"text": f"{switch_button_text}", "callbackData": "callback_switch_inline"}],
-            [{"text": "Назад", "callbackData": "start_inline_message"}],
-        ]
-        await self.bot.send_text(
-            chat_id=self.user_id,
-            text=message,
-            inline_keyboard_markup=json.dumps(inline_keyboard)
+            admin_message = f"Админ @{self.username} выключил бота"
+            switch_button_text = 'Включить'
+            switch_button_action = 'enable'
+
+        buttons[-1] = [
+            {"text": f"{switch_button_text}", "callbackData": f"callback_switch_inline-{switch_button_action}"}]
+        await self.bot.edit_text(
+            chat_id=chat_id,
+            msg_id=msg_id,
+            text=msg_text,
+            inline_keyboard_markup=json.dumps(buttons)
         )
+
+        # send notification to other admins
+        admins = util.get_admins(self.bot.name)
+        admins.remove(self.user_id)
+        for admin in admins:
+            admin_id = admin[0]
+            await self.bot.send_text(
+                chat_id=admin_id,
+                text=admin_message
+            )
+        # if is_active:
+        #     message = (
+        #         f"Теперь сообщения, которые подписчики написали "
+        #         f"@{self.bot.name}, начнут приходить и вам.\n"
+        #         "Остановить получение сообщений можно командой /off или по кнопке “Выключить”"
+        #     )
+        #     switch_button_text = 'Выключить'
+        # else:
+        #     message = (
+        #         "Получение сообщений для вас отключено. Сообщения? которые "
+        #         "пользователи будут отправлять в бота, будут утеряны"
+        #     )
+        #     switch_button_text = 'Включить обратно'
+        # inline_keyboard = [
+        #     [{"text": f"{switch_button_text}", "callbackData": "callback_switch_inline"}],
+        #     [{"text": "Назад", "callbackData": "start_inline_message"}],
+        # ]
+        # await self.bot.send_text(
+        #     chat_id=self.user_id,
+        #     text=message,
+        #     inline_keyboard_markup=json.dumps(inline_keyboard)
+        # )
         await self.set_null_callback()
 
     async def callback_on_off_success(self):

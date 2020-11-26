@@ -81,14 +81,17 @@ def switch_admin_status(user_id, bot_name) -> str:
         return "не активен" if is_admin_active else "активен"
 
 
-def switch_inline_status(bot_name):
+def switch_inline_status(bot_name, status: bool = None):
     admins = get_bot_admins(bot_name)
     if len(admins) > 0:
         is_active = is_admin_active(
             admins[0], bot_name
         )
         for admin in admins:
-            tarantool.update(ADMIN_SPACE_NAME, (admin, bot_name), (('=', 2, not is_active),))
+            # switch current status or set it from arg
+            tarantool.update(ADMIN_SPACE_NAME,
+                             (admin, bot_name),
+                             (('=', 2, status if status is not None else not is_active),))
 
 
 def get_bot_admins(bot_name):
@@ -194,3 +197,8 @@ def is_fwd_from_channel(event):
     return is_forwarded(event) and tarantool.exist_index('channel_messages',
                                                          get_fwd_id(event),
                                                          'msg_id')
+
+
+def str_to_bool(s: str) -> bool:
+    false_list = ['disable']
+    return s not in false_list

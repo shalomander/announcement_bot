@@ -160,9 +160,11 @@ async def start_inline_message(bot, event):
             )
             if is_active:
                 button = "⛔ ️Выключить"
+                button_action = 'disable'
                 message_active = f'Остановить бота можно командой /off или по кнопке "{button}"'
             else:
                 button = "Включить"
+                button_action = 'enable'
                 message_active = f'Включить бота можно командой /on или по кнопке "{button}"'
 
             icq_channel = select_index(BOT_SPACE_NAME, bot_name, index='bot')[0][-1]
@@ -184,7 +186,7 @@ async def start_inline_message(bot, event):
                     inline_keyboard_markup=json.dumps([
                         [{"text": "Настроить объявления", "callbackData": "callback_check_icq_channel"}],
                         [{"text": "Настроить админов", "callbackData": "callback_config_reply"}],
-                        [{"text": f"{button}", "callbackData": "callback_switch_inline"}],
+                        [{"text": f"{button}", "callbackData": f"callback_switch_inline-{button_action}"}],
                     ])
                 )
             else:

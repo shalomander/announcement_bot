@@ -46,8 +46,8 @@ class CallBackMiddlewareBase(ABC):
         self.username = util.extract_username(self.event_data)
         print()
         try:
-            await getattr(self, self.callback_name)()
-            await self.set_null_callback()
+            coro = await getattr(self, self.callback_name)()
+            await self.set_null_callback() if not coro else await coro
         except AttributeError as e:
             log.error(f"AttributeError in callback_middleware: {e}")
 
@@ -197,10 +197,13 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
 
         if is_active:
             admin_message = f"Админ @{self.username} включил бота"
+            callback_message = "Бот включен"
             switch_button_text = '⛔ ️Выключить'
             switch_button_action = 'disable'
+
         else:
             admin_message = f"Админ @{self.username} выключил бота"
+            callback_message = "Бот выключен"
             switch_button_text = 'Включить'
             switch_button_action = 'enable'
 
@@ -214,12 +217,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         )
 
         # send notification to other admins
-        admins = util.get_admins(self.bot.name)
+        admins = util.get_admin_uids(self.bot.name)
         admins.remove(self.user_id)
         for admin in admins:
-            admin_id = admin[0]
             await self.bot.send_text(
-                chat_id=admin_id,
+                chat_id=admin,
                 text=admin_message
             )
         # if is_active:
@@ -244,7 +246,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         #     text=message,
         #     inline_keyboard_markup=json.dumps(inline_keyboard)
         # )
-        await self.set_null_callback()
+        return self.set_answer_callback(callback_message)
 
     async def callback_on_off_success(self):
         """
@@ -728,12 +730,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 insert('channel_messages', (target_msg.get('msgId'), text))
 
                 # forward original message to admins
-                admins = util.get_admins(self.bot.name)
+                admins = util.get_admin_uids(self.bot.name)
                 admins.remove(self.user_id)
                 for admin in admins:
-                    admin_id = admin[0]
                     await self.bot.send_text(
-                        chat_id=admin_id,
+                        chat_id=admin,
                         forward_chat_id=self.user_id,
                         forward_msg_id=original_msg_id
                     )
@@ -774,12 +775,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             )
 
             # forward notification to admins
-            admins = util.get_admins(self.bot.name)
+            admins = util.get_admin_uids(self.bot.name)
             admins.remove(self.user_id)
             for admin in admins:
-                admin_id = admin[0]
                 await self.bot.send_text(
-                    chat_id=admin_id,
+                    chat_id=admin,
                     text=f"@{self.username} удалил сообщение:\n"
                          f"{fwd_text}"
                 )
@@ -833,12 +833,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         upsert('channel_messages', (update_message_id, text), ((1, '=', text),))
 
         # forward original message to admins
-        admins = util.get_admins(self.bot.name)
+        admins = util.get_admin_uids(self.bot.name)
         admins.remove(self.user_id)
         for admin in admins:
-            admin_id = admin[0]
             await self.bot.send_text(
-                chat_id=admin_id,
+                chat_id=admin,
                 forward_chat_id=self.user_id,
                 forward_msg_id=self.event_data['parts'][0]['payload']['message']['msgId'],
                 text=f"Оригинальное сообщение:\n{old_text}"
@@ -868,12 +867,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             )
 
             # send notification to other admins
-            admins = util.get_admins(self.bot.name)
+            admins = util.get_admins_uids(self.bot.name)
             admins.remove(self.user_id)
             for admin in admins:
-                admin_id = admin[0]
                 await self.bot.send_text(
-                    chat_id=admin_id,
+                    chat_id=admin,
                     forward_chat_id=self.user_id,
                     forward_msg_id=pin_msg_id,
                     text=f"Сообщение закреплено Админом @{self.username}"

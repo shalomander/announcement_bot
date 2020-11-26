@@ -172,8 +172,9 @@ def is_admin(user_id, bot_name):
     )
 
 
-def get_admins(bot_name):
-    return tarantool.select_index(ADMIN_SPACE_NAME, bot_name, index='bot_nick')
+def get_admin_uids(bot_name):
+    data = tarantool.select_index(ADMIN_SPACE_NAME, bot_name, index='bot_nick')
+    return [x[0] for x in data]
 
 
 def get_bot_channel(bot_name):

@@ -16,6 +16,7 @@ from handlers import (
 )
 from announcement_bot_inline import InlineAnnouncementBot
 import tarantool_utils as tarantool
+import utilities as util
 
 log = logging.getLogger(__name__)
 
@@ -63,18 +64,22 @@ def role_change(current, new):
             loop.create_task(start_all())
         else:
             loop.create_task(bot.stop_polling())
+            tarantool.close()
         log.info(f"role was change from {current} to {new}")
 
 
 async def start_bot(bot_nick, bot_data=None):
     bot_data = bot_data or tarantool.select_index(config.BOT_SPACE_NAME, bot_nick, index='bot')[0]
-    _, bot_token, _, bot_name, _, _, _ = bot_data
-    bot_instance = InlineAnnouncementBot(bot_token, bot_name)
-    bot_instance.start()
-    await update_bot_name(bot_instance.bot)
-    if bot_instance.is_running:
-        log.info(f"Success: {bot_name}\n")
-        inline_bots[bot_name] = bot_instance
+    user_id, bot_token, _, bot_name, *_ = bot_data
+    if await util.validate_token(bot_token):
+        bot_instance = InlineAnnouncementBot(bot_token, bot_name, user_id)
+        bot_instance.start()
+        await update_bot_name(bot_instance.bot)
+        if bot_instance.is_running:
+            log.info(f"Success: {bot_name}\n")
+            inline_bots[bot_name] = bot_instance
+    else:
+        tarantool.delete(config.BOT_SPACE_NAME, (user_id, bot_token))
 
 
 def stop_bot(bot_nick):
@@ -124,9 +129,9 @@ with PidFile(config.NAME):
         )
 
         pypros.ctlr.init(
-            self_alias=config['main']['alias'],
-            host=config['ctlr']['host'],
-            port=config['ctlr']['port']
+            self_alias=config.config['main']['alias'],
+            host=config.config['ctlr']['host'],
+            port=config.config['ctlr']['port']
         )
     server = None
     try:
@@ -134,8 +139,8 @@ with PidFile(config.NAME):
         if not config.DEV:
             server = loop.run_until_complete(
                 pypros.listen(
-                    config['main']['host'],
-                    int(config['main']['port']), process)
+                    config.config['main']['host'],
+                    int(config.config['main']['port']), process)
             )
         else:
             role_change('None', 'main')

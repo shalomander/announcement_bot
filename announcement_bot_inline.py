@@ -11,6 +11,7 @@ from mailru_im_async_bot.handler import (
     CommandHandler, BotButtonCommandHandler, MessageHandler
 )
 from mailru_im_async_bot.bot import Bot
+import utilities as util
 
 log = logging.getLogger(__name__)
 
@@ -31,10 +32,12 @@ class InlineAnnouncementBot:
     bot = None
     is_running = False
     _polling_task = None
+    running_tasks = []
 
-    def __init__(self, token, name, **kwargs):
+    def __init__(self, token, name, user_id, **kwargs):
         self.TOKEN = token
         self.NAME = name
+        self.owner_id=user_id
         self.loop = kwargs['loop'] if 'loop' in kwargs else asyncio.get_event_loop()
         self.bot = Bot(
             token=self.TOKEN,
@@ -70,6 +73,7 @@ class InlineAnnouncementBot:
     def start(self):
         log.info(f'\nStart inline bot @{self.NAME}')
         self._polling_task = self.loop.create_task(self.bot.start_polling())
+        self.running_tasks.append(self.loop.create_task(self._run_tasks()))
         self.update_status_bot(False)
         self.is_running = True
 
@@ -77,6 +81,8 @@ class InlineAnnouncementBot:
         log.info('\nStop inline bot @{self.NAME}')
         if isinstance(self._polling_task, Task):
             self._polling_task.cancel()
+        for task in self.running_tasks:
+            task.cancel()
         self._polling_task = None
         self.update_status_bot(False)
         self.is_running = False
@@ -90,3 +96,15 @@ class InlineAnnouncementBot:
         bot = tarantool.select_index(BOT_SPACE_NAME, self.NAME, index='bot')[0]
         bot[4] = status
         tarantool.replace(BOT_SPACE_NAME, bot)
+
+    async def check_token(self):
+        if not await util.validate_token(self.TOKEN):
+            tarantool.delete(config.BOT_SPACE_NAME, (self.owner_id, self.TOKEN))
+
+    async def _run_tasks(self):
+        while self.is_running:
+            try:
+                await self.check_token()
+                await asyncio.sleep(30)
+            except Exception as e:
+                log.exception(e)

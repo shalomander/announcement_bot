@@ -64,14 +64,15 @@ def role_change(current, new):
             loop.create_task(start_all())
         else:
             loop.create_task(bot.stop_polling())
+            tarantool.close()
         log.info(f"role was change from {current} to {new}")
 
 
 async def start_bot(bot_nick, bot_data=None):
     bot_data = bot_data or tarantool.select_index(config.BOT_SPACE_NAME, bot_nick, index='bot')[0]
     user_id, bot_token, _, bot_name, *_ = bot_data
-    if util.validate_token(bot_token):
-        bot_instance = InlineAnnouncementBot(bot_token, bot_name)
+    if await util.validate_token(bot_token):
+        bot_instance = InlineAnnouncementBot(bot_token, bot_name, user_id)
         bot_instance.start()
         await update_bot_name(bot_instance.bot)
         if bot_instance.is_running:

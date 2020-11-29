@@ -39,3 +39,7 @@ def upsert(space_name, tuple_value, op_list) -> tuple:
 
 def update(space_name, key, op_list) -> tuple:
     return __db.update(space_name, key, op_list)
+
+
+def close():
+    return __db.close()

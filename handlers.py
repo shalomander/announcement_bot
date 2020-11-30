@@ -288,7 +288,7 @@ async def message_inline(bot, event):
                     )
                 else:
                     # reply message with control buttons
-                    await callback_middleware_inline_bot.callback_reply_message()
+                    await callback_middleware_inline_bot.callback_reply_message(bot, event)
 
             except IndexError:
                 pass

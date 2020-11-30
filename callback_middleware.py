@@ -23,6 +23,11 @@ class CallBackMiddlewareBase(ABC):
     """
     Базовый класс для промежуточных обработчиков callback-функций
     """
+    edit_admin_mode = {}
+    edit_message_mode = {}
+    bot = None
+    user_id = None
+    callback_params = []
 
     async def __call__(self, bot, user_id, callback_name, query_id, **kwargs):
         """
@@ -43,7 +48,9 @@ class CallBackMiddlewareBase(ABC):
         self.callback_params = callback_data['params']
         self.event = self.kwargs['event'].data if 'event' in self.kwargs else None
         self.event_data = self.kwargs['event'].data if 'event' in self.kwargs else []
-        self.username = util.extract_username(self.event_data)
+        self.username = util.extract_username(self.event_data) if self.event_data else None
+        if self.user_id in self.edit_admin_mode:
+            self.edit_admin_mode.pop(self.user_id)
         print()
         try:
             coro = await getattr(self, self.callback_name)()
@@ -56,22 +63,24 @@ class CallBackMiddlewareBase(ABC):
         Закрыть обращение к callback-функции
         :return:
         """
-        await self.bot.answer_callback_query(
-            query_id=self.query_id,
-            text="",
-            show_alert=False
-        )
+        if self.query_id:
+            await self.bot.answer_callback_query(
+                query_id=self.query_id,
+                text="",
+                show_alert=False
+            )
 
     async def set_answer_callback(self, text):
         """
         Закрыть обращение к callback-функции
         :return: None
         """
-        await self.bot.answer_callback_query(
-            query_id=self.query_id,
-            text=text,
-            show_alert=False
-        )
+        if self.query_id:
+            await self.bot.answer_callback_query(
+                query_id=self.query_id,
+                text=text,
+                show_alert=False
+            )
 
     async def callback_ignore(self):
         """
@@ -171,14 +180,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
     Класс для обработки кол-бэк функций внутри бота-помощника
     """
 
-    edit_admin_mode = {}
-    edit_message_mode = {}
-
     def is_edit_admin_enabled(self) -> bool:
-        return bool(self.edit_admin_mode.get(self.user_id, False))
+        return self.user_id and bool(self.edit_admin_mode.get(self.user_id, False))
 
     def is_edit_msg_enabled(self) -> bool:
-        return bool(self.edit_message_mode.get(self.user_id, False))
+        return self.user_id and bool(self.edit_message_mode.get(self.user_id, False))
 
     async def callback_switch_inline(self):
         """
@@ -412,7 +418,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
     async def edit_admin(self, event_data):
         message_type = event_data['parts'][0]['type'] if 'parts' in event_data else 'message'
         edit_mode = self.edit_admin_mode.get(self.user_id, False)
-        link = admin_id = ''
+        link = admin_id = None
         if message_type == 'mention':
             admin_id = event_data['parts'][0]['payload']['userId']
         else:
@@ -735,6 +741,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 for admin in admins:
                     await self.bot.send_text(
                         chat_id=admin,
+                        text=f"Админ @{self.user_id} опубликовал объявление",
                         forward_chat_id=self.user_id,
                         forward_msg_id=original_msg_id
                     )
@@ -745,8 +752,10 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                     [{"text": "Закрепить в чате?", "callbackData": f"callback_pin_msg-{target_msg.get('msgId')}"}],
                     [{"text": "Готово", "callbackData": f"callback_disable_buttons-{replied_id}"}],
                 ]
-                self.bot.edit_text(
+                await self.bot.edit_text(
+                    chat_id=self.user_id,
                     msg_id=replied_id,
+                    reply_msg_id=original_msg_id,
                     text="Опубликовано! Уведомление о публикации отправлено всем админам",
                     inline_keyboard_markup=json.dumps(inline_keyboard)
                 )
@@ -899,7 +908,12 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             inline_keyboard_markup=json.dumps(inline_keyboard)
         )
 
-    async def callback_reply_message(self):
+    async def callback_reply_message(self, bot=None, event=None):
+        if bot:
+            self.bot = bot
+        if event:
+            self.event = event
+            self.user_id = event.from_chat
         message_id = self.callback_params[0] if len(self.callback_params) else self.event.data['msgId']
         is_fwd = util.is_fwd_from_channel(self.event)
         inline_keyboard = []
@@ -918,7 +932,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         inline_keyboard.append([{"text": "Отмена", "callbackData": f"callback_delete_post"}])
         await self.bot.send_text(
             chat_id=self.user_id,
-            text="Что сделать с объявлением?",
+            text="Что сделать с объявлением",
             reply_msg_id=message_id,
             inline_keyboard_markup=json.dumps(inline_keyboard)
         )

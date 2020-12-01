@@ -28,6 +28,7 @@ class CallBackMiddlewareBase(ABC):
     bot = None
     user_id = None
     callback_params = []
+    event = None
 
     async def __call__(self, bot, user_id, callback_name, query_id, **kwargs):
         """
@@ -755,7 +756,6 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 await self.bot.edit_text(
                     chat_id=self.user_id,
                     msg_id=replied_id,
-                    reply_msg_id=original_msg_id,
                     text="Опубликовано! Уведомление о публикации отправлено всем админам",
                     inline_keyboard_markup=json.dumps(inline_keyboard)
                 )
@@ -870,7 +870,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             icq_channel = util.get_bot_channel(self.bot.name)
 
             # pin target message
-            self.bot.pin_message(
+            await self.bot.pin_message(
                 chat_id=icq_channel,
                 msg_id=pin_msg_id
             )
@@ -933,7 +933,9 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         await self.bot.send_text(
             chat_id=self.user_id,
             text="Что сделать с объявлением",
-            reply_msg_id=message_id,
+            # reply_msg_id=message_id,
+            forward_msg_id=message_id,
+            forward_chat_id=self.user_id,
             inline_keyboard_markup=json.dumps(inline_keyboard)
         )
 

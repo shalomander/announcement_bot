@@ -129,6 +129,9 @@ class CallBackMiddleware(CallBackMiddlewareBase):
         """
         Сохранение данных о боте
         """
+
+        # some dark magic from prev developer
+        # needs rework but has no time
         _, bot_token, bot_id, bot_nick = select(USER_SPACE_NAME, self.user_id)[0]
         replace(USER_SPACE_NAME, (self.user_id, '', '', ''))
 
@@ -158,18 +161,20 @@ class CallBackMiddleware(CallBackMiddlewareBase):
             )
 
         else:
-            await self.bot.send_text(
-                self.user_id,
-                text=(
-                    f"Твой бот @{bot_nick} готов к работе!\n"
-                    f"Открой @{bot_nick} для получения сообщений и настройки "
-                    f"бота для пересылки сообщений в группы или каналы"
-                ),
-                inline_keyboard_markup=json.dumps([
-                    [{"text": "Открыть бота", "url": f"https://icq.im/{bot_nick}"}],
-                    [{"text": "Создать еще одного бота", "callbackData": "callback_start"}],
-                ])
-            )
+            # this will prevent sending messages if inline bot is empty
+            if bot_id and bot_nick:
+                await self.bot.send_text(
+                    self.user_id,
+                    text=(
+                        f"Твой бот @{bot_nick} готов к работе!\n"
+                        f"Открой @{bot_nick} для получения сообщений и настройки "
+                        f"бота для пересылки сообщений в группы или каналы"
+                    ),
+                    inline_keyboard_markup=json.dumps([
+                        [{"text": "Открыть бота", "url": f"https://icq.im/{bot_nick}"}],
+                        [{"text": "Создать еще одного бота", "callbackData": "callback_start"}],
+                    ])
+                )
         await self.set_null_callback()
 
 

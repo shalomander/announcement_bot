@@ -127,6 +127,13 @@ class VideoFilter(FileFilter):
         )
 
 
+class VoiceFilter(MessageFilter):
+    def filter(self, event):
+        return super(VoiceFilter, self).filter(event) and 'parts' in event.data and any(
+           p['type'] == Parts.VOICE.value for p in event.data['parts']
+        )
+
+
 class AudioFilter(FileFilter):
     def filter(self, event):
         return super(AudioFilter, self).filter(event) and any(
@@ -188,9 +195,11 @@ class TextFilter(MessageFilter):
     def filter(self, event):
         if super().filter(event):
             if not self.case_sensitive:
-                event.data["text"] = str(event.data["text"]).lower()
                 self.text = [str(i).lower() for i in self.text]
-            return any(i == event.data["text"] for i in self.text)
+            return any(
+                i == (event.data["text"] if self.case_sensitive else str(event.data["text"]).lower())
+                for i in self.text
+            )
         return False
 
 
@@ -221,7 +230,8 @@ class Filter(object):
     image = ImageFilter()
     video = VideoFilter()
     audio = AudioFilter()
-    media = image | video | audio
+    voice = VoiceFilter()
+    media = image | video | audio | voice
     data = file & ~media
     sticker = StickerFilter()
     url = URLFilter()

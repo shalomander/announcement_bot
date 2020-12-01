@@ -1,12 +1,23 @@
+import inspect
+import json
+
 import mailru_im_async_bot
-from mailru_im_async_bot import cut_none, url_maker, try_except_request, log, stat, stat_decorator
+from mailru_im_async_bot import (
+    cut_none_decorator,
+    url_maker_decorator,
+    try_except_request,
+    log,
+    stat,
+    cut_none,
+    url_maker
+)
 from mailru_im_async_bot.dispatcher import Dispatcher
 from mailru_im_async_bot.event import Event, EventType
 from mailru_im_async_bot.trace_config import trace_config
 from cached_property import cached_property
 from asyncio import CancelledError, Task
-from traceback import format_exc
-from aiohttp import FormData
+from async_generator import asynccontextmanager
+from aiohttp import FormData, ContentTypeError
 import asyncio
 import aiohttp
 import os
@@ -60,18 +71,53 @@ class Bot:
         await self._session.close()
 
     @try_except_request
-    @cut_none
-    @url_maker
+    @cut_none_decorator
+    @url_maker_decorator
     async def _get(self, url, *args, **kwargs):
         async with self._session.get(url, ssl=False, *args, **kwargs) as response:
             return await response.json()
 
     @try_except_request
-    @cut_none
-    @url_maker
+    @cut_none_decorator
+    @url_maker_decorator
     async def _post(self, url, *args, **kwargs):
         async with self._session.post(url, ssl=False, *args, **kwargs) as response:
             return await response.json()
+
+    @asynccontextmanager
+    async def _request_cm(self, url, method="GET", *args, **kwargs):
+        kwargs = cut_none(kwargs)
+        url = url_maker(kwargs, url)
+        caller_method_name = None
+        try:
+            caller_method_name = inspect.stack()[2][3]
+        except IndexError as e:
+            log.info(e)
+
+        if caller_method_name:
+            stat(metric=".".join(["botapi", caller_method_name, "cnt"]), value=1)
+
+        try:
+            async with getattr(self._session, str(method).lower())(url, ssl=False, *args, **kwargs) as response:
+                if caller_method_name:
+                    stat(metric=".".join(
+                        ["botapi", caller_method_name, response.method, str(response.status), "cnt"]
+                    ), value=1)
+                yield response
+        except asyncio.TimeoutError as e:
+            if caller_method_name:
+                stat(metric=".".join(["botapi", caller_method_name, response.method, "timeout", "cnt"]), value=1)
+            raise
+        except ContentTypeError as e:
+            log.warning(f"response is not json: {e}")
+            raise
+        except CancelledError as e:
+            log.info(f"request cancelled: {e}")
+        except Exception as e:
+            if caller_method_name:
+                stat(metric=".".join(["botapi", caller_method_name, response.method, "error", "cnt"]), value=1)
+            log.exception(e)
+            raise
 
     async def start_polling(self):
         for item, message in (
@@ -103,8 +149,10 @@ class Bot:
             try:
                 response = await self.events_get()
                 if response:
+                    if "description" in response and response["description"] == 'Invalid token':
+                        raise Exception(response)
                     for event in response.get("events", []):
-                        stat('events_queue', self.events.qsize())
+                        stat('events_queue.cnt', self.events.qsize())
                         if self.events.full():
                             log.critical("events queue overflow")
                             await asyncio.sleep(1)
@@ -115,8 +163,8 @@ class Bot:
                             )
             except CancelledError:
                 log.warning("pooling cancelled")
-            except Exception:
-                log.exception(format_exc())
+            except Exception as e:
+                log.exception(e)
                 await asyncio.sleep(5)
 
     async def idle(self):
@@ -136,12 +184,11 @@ class Bot:
             library_version=mailru_im_async_bot.__version__
         )
 
-    @stat_decorator()
     async def events_get(self, poll_time_s=None, last_event_id=None):
         poll_time_s = self.poll_time_s if poll_time_s is None else poll_time_s
         last_event_id = self.last_event_id if last_event_id is None else last_event_id
 
-        return await self._get(
+        async with self._request_cm(
             url="{}/events/get".format(self.api_base_url),
             params={
                 "token": self.token,
@@ -149,34 +196,35 @@ class Bot:
                 "lastEventId": last_event_id
             },
             timeout=poll_time_s + self.request_timeout_s
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def self_get(self):
-        return await self._get(
+        async with self._request_cm(
             url="{}/self/get".format(self.api_base_url),
             params={
                 "token": self.token
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def send_text(self, chat_id, text, reply_msg_id=None, forward_chat_id=None, forward_msg_id=None,
                         inline_keyboard_markup=None):
-        return await self._get(
-            url="{}/messages/sendText".format(self.api_base_url),
-            params={
-                "token": self.token,
-                "chatId": chat_id,
-                "text": text,
-                "replyMsgId": reply_msg_id,
-                "forwardChatId": forward_chat_id,
-                "forwardMsgId": forward_msg_id,
-                "inlineKeyboardMarkup": inline_keyboard_markup
-            }
+        params = [
+            ("token", self.token), ("chatId", chat_id), ("text", text), ("forwardChatId", forward_chat_id),
+            ("inlineKeyboardMarkup", inline_keyboard_markup)
+        ]
+
+        mailru_im_async_bot.prepare_repeated_params(
+            params, {"replyMsgId": reply_msg_id, "forwardMsgId": forward_msg_id}
         )
 
-    @stat_decorator()
+        async with self._request_cm(
+            url="{}/messages/sendText".format(self.api_base_url),
+            params=params
+        ) as response:
+            return await response.json()
+
     async def send_file(self, chat_id, file_id=None, file=None, caption=None, reply_msg_id=None, forward_chat_id=None,
                         forward_msg_id=None, inline_keyboard_markup=None):
         data = None
@@ -184,22 +232,23 @@ class Bot:
             data = FormData()
             data.add_field('file', file, filename=os.path.basename(file.name))
 
-        return await self._post(
-            url="{}/messages/sendFile".format(self.api_base_url),
-            params={
-                "token": self.token,
-                "chatId": chat_id,
-                "fileId": file_id,
-                "caption": caption,
-                "replyMsgId": reply_msg_id,
-                "forwardChatId": forward_chat_id,
-                "forwardMsgId": forward_msg_id,
-                "inlineKeyboardMarkup": inline_keyboard_markup
-            },
-            data=data,
+        params = [
+            ("token", self.token), ("chatId", chat_id), ("fileId", file_id), ("forwardChatId", forward_chat_id),
+            ("inlineKeyboardMarkup", inline_keyboard_markup), ("caption", caption)
+        ]
+
+        mailru_im_async_bot.prepare_repeated_params(
+            params, {"replyMsgId": reply_msg_id, "forwardMsgId": forward_msg_id}
         )
 
-    @stat_decorator()
+        async with self._request_cm(
+            url="{}/messages/sendFile".format(self.api_base_url),
+            method="POST",
+            params=params,
+            data=data,
+        ) as response:
+            return await response.json()
+
     async def send_voice(self, chat_id, file_id=None, file=None, reply_msg_id=None, forward_chat_id=None,
                          forward_msg_id=None, inline_keyboard_markup=None):
         data = None
@@ -207,23 +256,25 @@ class Bot:
             data = FormData()
             data.add_field('file', file, filename=os.path.basename(file.name))
 
-        return await self._post(
-            url="{}/messages/sendVoice".format(self.api_base_url),
-            params={
-                "token": self.token,
-                "chatId": chat_id,
-                "fileId": file_id,
-                "replyMsgId": reply_msg_id,
-                "forwardChatId": forward_chat_id,
-                "forwardMsgId": forward_msg_id,
-                "inlineKeyboardMarkup": inline_keyboard_markup
-            },
-            data=data,
+        params = [
+            ("token", self.token), ("chatId", chat_id), ("fileId", file_id), ("forwardChatId", forward_chat_id),
+            ("inlineKeyboardMarkup", inline_keyboard_markup)
+        ]
+
+        mailru_im_async_bot.prepare_repeated_params(
+            params, {"replyMsgId": reply_msg_id, "forwardMsgId": forward_msg_id}
         )
 
-    @stat_decorator()
+        async with self._request_cm(
+            url="{}/messages/sendVoice".format(self.api_base_url),
+            method="POST",
+            params=params,
+            data=data,
+        ) as response:
+            return await response.json()
+
     async def edit_text(self, chat_id, msg_id, text, inline_keyboard_markup=None):
-        return await self._get(
+        async with self._request_cm(
             url="{}/messages/editText".format(self.api_base_url),
             params={
                 "token": self.token,
@@ -232,11 +283,11 @@ class Bot:
                 "text": text,
                 "inlineKeyboardMarkup": inline_keyboard_markup
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def answer_callback_query(self, query_id, text=None, show_alert=False, url=None):
-        return await self._get(
+        async with self._request_cm(
             url="{}/messages/answerCallbackQuery".format(self.api_base_url),
             params={
                 "token": self.token,
@@ -245,84 +296,84 @@ class Bot:
                 "showAlert": str(show_alert).lower(),
                 "url": url
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def delete_messages(self, chat_id, msg_id):
-        return await self._get(
+        async with self._request_cm(
             url="{}/messages/deleteMessages".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id,
                 "msgId": msg_id
             },
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def send_actions(self, chat_id, actions):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/sendActions".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id,
                 "actions": actions
             },
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def get_chat_info(self, chat_id):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/getInfo".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def get_chat_admins(self, chat_id):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/getAdmins".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def get_chat_members(self, chat_id, cursor=None):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/getMembers".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id,
                 "cursor": cursor
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def get_chat_blocked_users(self, chat_id):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/getBlockedUsers".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def get_chat_pending_users(self, chat_id):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/getPendingUsers".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def chat_block_user(self, chat_id, user_id, del_last_messages=False):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/blockUser".format(self.api_base_url),
             params={
                 "token": self.token,
@@ -330,22 +381,22 @@ class Bot:
                 "userId": user_id,
                 "delLastMessages": str(del_last_messages).lower()
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def chat_unblock_user(self, chat_id, user_id):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/unblockUser".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id,
                 "userId": user_id
             },
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def chat_resolve_pending(self, chat_id, approve=True, user_id="", everyone=False):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/resolvePending".format(self.api_base_url),
             params={
                 "token": self.token,
@@ -354,70 +405,111 @@ class Bot:
                 "userId": user_id,
                 "everyone": str(everyone).lower()
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def set_chat_title(self, chat_id, title):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/setTitle".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id,
                 "title": title
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def set_chat_about(self, chat_id, about):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/setAbout".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id,
                 "about": about
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def set_chat_rules(self, chat_id, rules):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/setRules".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id,
                 "rules": rules
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def get_file_info(self, file_id):
-        return await self._get(
+        async with self._request_cm(
             url="{}/files/getInfo".format(self.api_base_url),
             params={
                 "token": self.token,
                 "fileId": file_id
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def pin_message(self, chat_id, msg_id):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/pinMessage".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id,
                 "msgId": msg_id
             }
-        )
+        ) as response:
+            return await response.json()
 
-    @stat_decorator()
     async def unpin_message(self, chat_id, msg_id):
-        return await self._get(
+        async with self._request_cm(
             url="{}/chats/unpinMessage".format(self.api_base_url),
             params={
                 "token": self.token,
                 "chatId": chat_id,
                 "msgId": msg_id
             }
-        )
+        ) as response:
+            return await response.json()
 
+    async def add_chat_members(self, chat_id, members):
+        async with self._request_cm(
+            url="{}/chats/members/add".format(self.api_base_url),
+            params={
+                "token": self.token,
+                "chatId": chat_id,
+                "members": json.dumps([{"sn": m} for m in members])
+            }
+        ) as response:
+            return await response.json()
+
+    async def create_chat(
+            self, name, about="", rules="", members=None, public=False, join_moderation=False, default_role="member"
+    ):
+        members = [] if members is None else [members] if type(members) != list else members
+        async with self._request_cm(
+            url="{}/chats/createChat".format(self.api_base_url),
+            params={
+                "token": self.token,
+                "name": name,
+                "about": about,
+                "rules": rules,
+                "members": json.dumps([{"sn": m} for m in members]),
+                "public": "true" if public else "false",
+                "defaultRole": default_role,
+                "joinModeration": str(join_moderation).lower()
+            }
+        ) as response:
+            return await response.json()
+
+    async def delete_chat_members(self, chat_id, members):
+        async with self._request_cm(
+            url="{}/chats/members/delete".format(self.api_base_url),
+            params={
+                "token": self.token,
+                "chatId": chat_id,
+                "members": json.dumps([{"sn": m} for m in members])
+            }
+        ) as response:
+            return await response.json()

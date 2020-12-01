@@ -33,15 +33,17 @@ def parse_bot_info(text: str) -> dict:
 
 
 def parse_user_id(text: str) -> int:
-    return re.search(
+    result = re.search(
         r"\d+", text
-    )[0]
+    )
+    return result[0] if result else None
 
 
 def parse_group_link(text: str) -> str:
-    return re.search(
+    result = re.search(
         r"https://icq.im/\w+", text
-    )[0]
+    )
+    return result[0] if result else None
 
 
 def ltrim(text: str, prefix) -> str:

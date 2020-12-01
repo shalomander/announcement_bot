@@ -1,0 +1,12 @@
+[Unit]
+Description=test_bot
+After=multi-user.target
+
+[Service]
+Restart=always
+Type=idle
+WorkingDirectory=/usr/local/share/test_bot
+ExecStart=/usr/local/share/test_bot/venv3.6/bin/python /usr/local/share/test_bot/test_bot.py /usr/local/etc/test_bot/
+
+[Install]
+WantedBy=multi-user.target

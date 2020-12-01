@@ -1,4 +1,7 @@
 import asyncio
+import logging
+
+log = logging.getLogger(__name__)
 
 
 class User:
@@ -11,6 +14,7 @@ class User:
         self.handler = None
 
     async def wait_response(self):
+        log.info(self)
         return await self.events.get()
 
     def __str__(self):

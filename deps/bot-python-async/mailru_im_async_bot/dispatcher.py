@@ -18,28 +18,28 @@ class Dispatcher:
 
     async def task_handler(self, handler, event, user):
         try:
-            log.debug(f'create task with timeout for {user}. event {event}')
+            log.info(f'create task with timeout for user[{user}] event[{event.id}]')
             await asyncio.wait_for(handler.handle(event, self, user), timeout=self.bot.task_timeout_s)
         except asyncio.TimeoutError:
-            log.info("task for user '{user_id}' with eventId '{event_id}' cancelled by timeout ({s})s".format(
+            log.info("task for user[{user_id}] with eventId[{event_id}] cancelled by timeout ({s})s".format(
                 user_id=user.id, event_id=event.id, s=self.bot.task_timeout)
             )
         except asyncio.CancelledError:
-            log.info(f"task for user '{user.id}' with eventId '{event.id}' cancelled'")
+            log.info(f"task for user[{user.id}] with eventId[{event.id}] cancelled'")
         except Exception as e:
             log.exception(e)
         finally:
-            log.debug(f'finally task for {user}')
+            log.info(f'finally task for {user}')
             user.handler = None
             while not user.events.empty():
                 remaining_event = await user.events.get()
-                log.debug(f'move event {remaining_event.id} from user {user.id} queue into bot queue')
+                log.info(f'move event {remaining_event.id} from user[{user.id}] queue into bot queue')
                 await self.bot.events.put(remaining_event)
 
     async def dispatch(self):
         while self.bot.is_running and self.bot.is_polling:
             task_len = len(asyncio.Task.all_tasks())
-            stat('coroutine', task_len)
+            stat('coroutine.cnt', task_len)
             if task_len < self.bot.task_max_len:
                 # get event from queue
                 event = await self.bot.events.get()
@@ -53,21 +53,22 @@ class Dispatcher:
                 self.bot.users[user_id] = user
 
                 try:
-                    log.debug("dispatching event '{}'.".format(event))
+                    log.info(f"dispatching event[{event.id}]")
                     processed = False
                     for handler in (h for h in self.handlers if h.check(event=event, dispatcher=self)):
-                        log.debug(f'handle event {event} by {handler}')
+                        log.info(f'handle event[{event.id}] by handler[{handler}]')
                         if user.task and not user.task.done():
                             if isinstance(handler, DefaultHandler) or [
                                 i for i in handler.ignore if i is user.handler
                             ]:
-                                log.info(f"{handler} was cancelled because {user} have active task ")
+                                log.info(f"handler[{handler}] was cancelled because user[{user}] have active task")
                                 break
                             else:
                                 try:
-                                    log.debug(f'attempt cancel user {user_id} task')
+                                    log.info(f'attempt cancel user {user_id} task')
                                     user.handler = None
                                     user.task.cancel()
+                                    await user.task
                                 except Exception as e:
                                     log.info(e)
                         if handler.multiline:
@@ -75,11 +76,11 @@ class Dispatcher:
                             user.parent_event_id = event.id
                             user.handler = handler
                         else:
-                            log.debug(f'create task for {user}')
+                            log.info(f'create task for user[{user}]')
                             self.bot.loop.create_task(handler.handle(event, self))
                         processed = True
                     if not processed and user.task and not user.task.done():
-                        log.debug(f'put event {event.id} into user {user_id} queue')
+                        log.info(f'put event[{event.id}] into user[{user_id}] queue')
                         await self.bot.users[user_id].events.put(event)
                 except StopDispatching:
                     log.debug("Caught '{}' exception, stopping dispatching.".format(StopDispatching.__name__))

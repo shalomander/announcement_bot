@@ -22,8 +22,8 @@ class HandlerBase(ABC):
 
     async def handle(self, event, dispatcher, user=None):
         if self.callback:
-            log.debug(f"call '{self.callback.__name__}' via '{self.__class__.__name__}'")
-            stat(self.callback.__name__, 1)
+            log.info(f"call '{self.callback.__name__}' via '{self.__class__.__name__}'")
+            stat(f"callback.{self.callback.__name__}.cnt", 1)
             kwargs = {'bot': dispatcher.bot, 'event': event}
             if user:
                 kwargs['user'] = user

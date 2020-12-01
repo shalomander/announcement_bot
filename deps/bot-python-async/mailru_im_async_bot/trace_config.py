@@ -28,7 +28,7 @@ async def on_request_end(session, trace_config_ctx, params):
     else:
         params.response._text = "[binary data]"
 
-    log.info(
+    log.debug(
         "\n[request {time}]\n{method} {url}\n{headers}\n{body}".format(
             time=trace_config_ctx.time_start,
             method=trace_config_ctx.method,
@@ -37,7 +37,7 @@ async def on_request_end(session, trace_config_ctx, params):
             body=str(trace_config_ctx.chunk) + "\n" if trace_config_ctx.chunk else ""
         ))
 
-    log.info(
+    log.debug(
         "\n[response {time}]\n{status_code} {reason}\n{headers}\n{body}\n".format(
             time=trace_config_ctx.time_end,
             status_code=params.response.status,

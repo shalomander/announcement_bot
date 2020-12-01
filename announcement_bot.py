@@ -148,5 +148,7 @@ with PidFile(config.NAME):
     finally:
         if server:
             server.close()
+        tarantool.close()
         loop.run_until_complete(pypros.ipros.shutdown())
         loop.close()
+

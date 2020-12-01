@@ -1,0 +1,5 @@
+cached-property == 1.5.1
+aiohttp == 3.6.2
+six == 1.14.0
+pid == 3.0.0
+async_generator == 1.10

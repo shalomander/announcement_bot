@@ -132,5 +132,43 @@ box.once("create_v0.0.1", function()
     })
 end
 )
+box.once("create_v0.0.2", function()
+    box.space.messages:drop()
+    box.space.channel_messages:drop()
+    box.schema.space.create('messages', {
+        if_not_exists = true,
+        format={
+            {name = 'original_id', type = 'string'}, -- original msg_id
+            {name = 'text', type = 'string'},
+            {name = 'user_id', type = 'string'},
+            {name = 'reply_id', type = 'string'},
+            {name = 'controls_id', type = 'string'},
+            {name = 'post_id', type = 'string'},
+            {name = 'forwarded_id', type = 'array'}
+        }
+    })
+    box.space.messages:create_index('primary', {
+        type = 'hash',
+        parts = {'original_id'},
+        if_not_exists = true,
+        unique=true
+    })
+    box.space.messages:create_index('reply', {
+        type = 'tree',
+        parts = {'reply_id'},
+        if_not_exists = true,
+    })
+    box.space.messages:create_index('controls', {
+        type = 'tree',
+        parts = {'controls_id'},
+        if_not_exists = true,
+    })
+    box.space.messages:create_index('post', {
+        type = 'tree',
+        parts = {'post_id'},
+        if_not_exists = true,
+        unique=false
+    })
 
-
+end
+)

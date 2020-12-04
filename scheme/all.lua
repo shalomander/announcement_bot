@@ -144,7 +144,7 @@ box.once("create_v0.0.2", function()
             {name = 'reply_id', type = 'string'},
             {name = 'controls_id', type = 'string'},
             {name = 'post_id', type = 'string'},
-            {name = 'forwarded_id', type = 'array'}
+            {name = 'post_channel', type = 'string'}
         }
     })
     box.space.messages:create_index('primary', {
@@ -166,6 +166,12 @@ box.once("create_v0.0.2", function()
     box.space.messages:create_index('post', {
         type = 'tree',
         parts = {'post_id'},
+        if_not_exists = true,
+        unique=false
+    })
+    box.space.messages:create_index('channel', {
+        type = 'tree',
+        parts = {'post_channel'},
         if_not_exists = true,
         unique=false
     })

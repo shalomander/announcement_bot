@@ -196,10 +196,22 @@ def get_fwd_id(event):
     return event.data['parts'][0]['payload']['message']['msgId']
 
 
-def is_fwd_from_channel(event):
-    return is_forwarded(event) and tarantool.exist_index('channel_messages',
-                                                         get_fwd_id(event),
-                                                         'msg_id')
+def get_fwd_text(event):
+    return event.data['parts'][0]['payload']['message']['text']
+
+
+def get_fwd_chat(event):
+    return event.data['parts'][0]['payload']['message']['chat']['chatId']
+
+
+def is_fwd_from_channel(bot, event):
+    is_fwd = False
+    if is_forwarded(event):
+        message_data = tarantool.select_index('messages', get_fwd_id(event), 'post')
+        icq_channel = get_bot_channel(bot.name)
+        if message_data[0][6] == icq_channel:
+            is_fwd = True
+    return is_fwd
 
 
 def str_to_bool(s: str) -> bool:

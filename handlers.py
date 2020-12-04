@@ -259,7 +259,7 @@ async def message_inline(bot, event):
 
     user_id = event.data['from']['userId']
     message_id = event.data['msgId']
-    text = event.data['text']
+    text = event.data['text'] if 'text' in event.data else ''
     is_admin = util.is_admin(user_id, bot_name)
     if not text.startswith("/"):
         if is_admin:

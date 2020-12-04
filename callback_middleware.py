@@ -740,7 +740,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             )
             if target_msg.get('ok'):
                 msg_posted = target_msg['msgId']
-                update('messages', msg_id, (('=', 5, msg_posted),))
+                update('messages', msg_id, (('=', 5, msg_posted), ('=', 6, icq_channel)))
 
                 # forward original message to admins
                 admins = util.get_admin_uids(self.bot.name)
@@ -785,26 +785,33 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
     async def callback_delete_fwd(self):
         try:
             icq_channel = util.get_bot_channel(self.bot.name)
-            fwd_id = self.callback_params[0]
-            fwd_text = self.event_data['parts'][0]['payload']['message']['text']
-            # delete forwarded message
-            await self.bot.delete_messages(
-                chat_id=icq_channel,
-                msg_id=fwd_id
-            )
-
-            # forward notification to admins
-            admins = util.get_admin_uids(self.bot.name)
-            admins.remove(self.user_id)
-            for admin in admins:
-                await self.bot.send_text(
-                    chat_id=admin,
-                    text=f"@{self.username} удалил сообщение:\n"
-                         f"{fwd_text}"
+            post_id = self.callback_params[0]
+            message_data = select('messages', post_id)
+            if message_data:
+                message = message_data[0]
+                # delete forwarded message
+                await self.bot.delete_messages(
+                    chat_id=icq_channel,
+                    msg_id=post_id
                 )
 
-            # edit replied message
-            await self.callback_disable_buttons(True)
+                # delete replied message
+                await self.bot.delete_messages(
+                    chat_id=self.user_id,
+                    msg_id=message[3]
+                )
+
+                # forward notification to admins
+                admins = util.get_admin_uids(self.bot.name)
+                admins.remove(self.user_id)
+                for admin in admins:
+                    await self.bot.send_text(
+                        chat_id=admin,
+                        text=f"@{self.username} удалил сообщение:\n"
+                             f"{message[1]}"
+                    )
+                # edit replied message
+                await self.callback_disable_buttons(True, target_id=message[4])
         except IndexError:
             pass
 
@@ -909,7 +916,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             log.error(e)
 
     async def callback_disable_buttons(self, deleted=False, target_id=None):
-        controls_id = self.callback_params[0] if len(self.callback_params) else self.event_data['message']['msgId']
+        controls_id =target_id or self.callback_params[0] if len(self.callback_params) else self.event_data['message']['msgId']
         text = self.event_data['message']['text']
         await self.bot.edit_text(
             chat_id=self.event_data['message']['chat']['chatId'],
@@ -925,26 +932,38 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         try:
             message_id = self.event.data['msgId'] if event else self.callback_params[0]
             message_text = self.event.text
-            is_fwd = util.is_fwd_from_channel(self.event)
+            message_chat_id = self.user_id
+            is_fwd = util.is_fwd_from_channel(self.bot, self.event)
             inline_keyboard = []
-            if is_fwd:
-                fwd_msg_id = util.get_fwd_id(self.event)
-                inline_keyboard.append([{"text": "Редактировать",
-                                         "callbackData": f"callback_edit_fwd-{fwd_msg_id}-{message_id}"}])
-                inline_keyboard.append([{"text": "Удалить",
-                                         "callbackData": f"callback_delete_fwd-{fwd_msg_id}"}])
-                inline_keyboard.append([{"text": "Продублировать\n как новое",
-                                         "callbackData": f"callback_send_post-{fwd_msg_id}"}])
+            send_button_text = "Опубликовть"
 
-            else:
-                inline_keyboard.append([{"text": "Опубликовть",
-                                         "callbackData": f"callback_send_post-{message_id}"}])
+            if is_fwd:
+                message_id = util.get_fwd_id(self.event)
+                message_text = util.get_fwd_text(self.event)
+                message_chat_id = util.get_fwd_chat(self.event)
+                inline_keyboard.append([{"text": "Редактировать",
+                                         "callbackData": f"callback_edit_fwd-{message_id}"}])
+                inline_keyboard.append([{"text": "Удалить",
+                                         "callbackData": f"callback_delete_fwd-{message_id}"}])
+                send_button_text = "Продублировать как новое"
+
+            inline_keyboard.append([{"text": send_button_text, "callbackData": f"callback_send_post-{message_id}"}])
             inline_keyboard.append([{"text": "Отмена", "callbackData": f"callback_delete_post-{message_id}"}])
-            reply_msg = await self.bot.send_text(
-                chat_id=self.user_id,
-                reply_msg_id=message_id,
-                text=''
-            )
+
+            reply_msg = None
+            if is_fwd:
+                reply_msg = await self.bot.send_text(
+                    chat_id=self.user_id,
+                    forward_msg_id=message_id,
+                    forward_chat_id=message_chat_id,
+                    text=''
+                )
+            else:
+                reply_msg = await self.bot.send_text(
+                    chat_id=self.user_id,
+                    reply_msg_id=message_id,
+                    text=''
+                )
             controls_msg = await self.bot.send_text(
                 chat_id=self.user_id,
                 text="Что сделать с объявлением",
@@ -958,8 +977,8 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                                     self.user_id,
                                     reply_id,
                                     controls_id,
-                                    '0',
-                                    [])
+                                    '',
+                                    '')
                        )
         except IndexError as e:
             log.error(e)

@@ -179,11 +179,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
     Класс для обработки кол-бэк функций внутри бота-помощника
     """
 
-    def is_edit_admin_enabled(self) -> bool:
-        return self.user_id and bool(self.edit_admin_mode.get(self.user_id, False))
+    def is_edit_admin_enabled(self, user_id) -> bool:
+        return user_id and bool(self.edit_admin_mode.get(user_id, False))
 
-    def is_edit_msg_enabled(self) -> bool:
-        return self.user_id and bool(self.edit_message_mode.get(self.user_id, False))
+    def is_edit_msg_enabled(self, user_id) -> bool:
+        return user_id and bool(self.edit_message_mode.get(user_id, False))
 
     async def callback_switch_inline(self):
         """
@@ -356,7 +356,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             else:
                 await self.callback_add_new_icq_channels()
         except IndexError:
-            log.error("Ошибка при провпрка наличия канала для прослушивания")
+            log.error("Ошибка при проверке наличия канала или группы")
         finally:
             await self.set_null_callback()
 
@@ -446,15 +446,15 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 await self.bot.send_text(
                     self.user_id,
                     text=(
-                        f"Не удалось добавить админа @{username}"
+                        f"Не удалось добавить админа @[{new_admin_id}]"
                     )
                 )
             else:
                 await self.bot.send_text(
                     self.user_id,
                     text=(
-                        f"Пользователь @{username} назначен Администратором бота.\n"
-                        f"⚠️ ВАЖНО: Пользователь должен САМ открыть @{self.bot.name} и стартовать его, "
+                        f"Пользователь @[{new_admin_id}] назначен Администратором бота.\n"
+                        f"⚠️ ВАЖНО: пользователь должен САМ открыть @{self.bot.name} и стартовать его, "
                         "чтобы начать получать сообщения"
                     )
                 )
@@ -513,24 +513,20 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         Удаление админа
         :return:
         """
-        username = None
-        response = await self.bot.get_chat_info(admin_id)
-        if response.get("ok"):
-            username = response.get('nick') or admin_id
         try:
             delete(ADMIN_SPACE_NAME, (admin_id, self.bot.name))
         except DatabaseError:
             await self.bot.send_text(
                 self.user_id,
                 text=(
-                    f"не удалось удалить админа @{username}"
+                    f"Не удалось удалить админа @[{admin_id}]"
                 )
             )
         else:
             await self.bot.send_text(
                 self.user_id,
                 text=(
-                    f"Пользователь @{username} удален из списка Администраторов бота."
+                    f"Пользователь @[{admin_id}] удален из списка администраторов бота."
                 )
             )
         await self.callback_config_reply()
@@ -583,7 +579,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         await self.bot.send_text(
             self.user_id,
             text=(
-                "Чтобы в группу или канал начали публиковываться объявления, нужно:\n"
+                "Чтобы в группу или канал начали публиковаться объявления, нужно:\n"
                 f"1) Добавить @{self.bot.name} в канал\n"
                 '2) Сделать бота администратором\n'
                 "3) Прислать сюда ссылку на группу или канал\n"

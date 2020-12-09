@@ -133,7 +133,7 @@ class CallBackMiddleware(CallBackMiddlewareBase):
         # some dark magic from prev developer
         # needs rework but has no time
         _, bot_token, bot_id, bot_nick = select(USER_SPACE_NAME, self.user_id)[0]
-        replace(USER_SPACE_NAME, (self.user_id, '', '', ''))
+        # replace(USER_SPACE_NAME, (self.user_id, '', '', ''))
 
         try:
             insert(BOT_SPACE_NAME, (
@@ -150,32 +150,25 @@ class CallBackMiddleware(CallBackMiddlewareBase):
                 self.user_id, bot_nick, True, '', 0, ''
             ))
             await self.kwargs['bot_callbacks']['start'](bot_nick)
-
-        except DatabaseError:
-            await self.bot.send_text(
-                self.user_id,
-                text="Бот с таким botId уже был добавлен",
-                inline_keyboard_markup=json.dumps([
-                    [{"text": "Попробовать еще раз", "callbackData": "callback_start"}],
-                ])
-            )
-
-        else:
-            # this will prevent sending messages if inline bot is empty
             if bot_id and bot_nick:
-                await self.bot.send_text(
-                    self.user_id,
-                    text=(
-                        f"Твой бот @{bot_nick} готов к работе!\n"
-                        f"Открой @{bot_nick} для получения сообщений и настройки "
-                        f"бота для пересылки сообщений в группы или каналы"
-                    ),
-                    inline_keyboard_markup=json.dumps([
-                        [{"text": "Открыть бота", "url": f"https://icq.im/{bot_nick}"}],
-                        [{"text": "Создать еще одного бота", "callbackData": "callback_start"}],
-                    ])
-                )
-        await self.set_null_callback()
+                message_text = (f"Твой бот @{bot_nick} готов к работе!\n"
+                                f"Открой @{bot_nick} для получения сообщений и настройки "
+                                f"бота для пересылки сообщений в группы или каналы")
+                inline_keyboard = [
+                    [{"text": "Открыть бота", "url": f"https://icq.im/{bot_nick}"}],
+                    [{"text": "Создать еще одного бота", "callbackData": "callback_start"}]
+                ]
+        except DatabaseError:
+            message_text = "Бот с таким botId уже был добавлен"
+            inline_keyboard = [
+                [{"text": "Попробовать еще раз", "callbackData": "callback_start"}]
+            ]
+        await self.bot.edit_text(
+            chat_id=self.user_id,
+            msg_id=self.event['message']['msgId'],
+            text=message_text,
+            inline_keyboard_markup=json.dumps(inline_keyboard)
+        )
 
 
 callback_middleware = CallBackMiddleware()
@@ -916,7 +909,8 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             log.error(e)
 
     async def callback_disable_buttons(self, deleted=False, target_id=None):
-        controls_id =target_id or self.callback_params[0] if len(self.callback_params) else self.event_data['message']['msgId']
+        controls_id = target_id or self.callback_params[0] if len(self.callback_params) else self.event_data['message'][
+            'msgId']
         text = self.event_data['message']['text']
         await self.bot.edit_text(
             chat_id=self.event_data['message']['chat']['chatId'],

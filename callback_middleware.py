@@ -405,7 +405,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         await self.bot.send_text(
             self.user_id,
             text=(
-                "Чтобы настроить пересылку свех сообщений в группу с админами:\n"
+                "Чтобы настроить пересылку всех сообщений в группу с админами:\n"
                 f"1) добавить @{self.bot.name} в группу\n"
                 "2) прислать сюда ссылку на группу"
             ),
@@ -453,7 +453,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 await self.bot.send_text(
                     self.user_id,
                     text=(
-                        f"Пользователь @[{new_admin_id}] назначен Администратором бота.\n"
+                        f"Пользователь @[{new_admin_id}] назначен дминистратором бота.\n"
                         f"⚠️ ВАЖНО: пользователь должен САМ открыть @{self.bot.name} и стартовать его, "
                         "чтобы начать получать сообщения"
                     )
@@ -514,21 +514,24 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         :return:
         """
         try:
-            delete(ADMIN_SPACE_NAME, (admin_id, self.bot.name))
-        except DatabaseError:
-            await self.bot.send_text(
-                self.user_id,
-                text=(
-                    f"Не удалось удалить админа @[{admin_id}]"
+            if len(select(ADMIN_SPACE_NAME, (admin_id, self.bot.name))):
+                result = delete(ADMIN_SPACE_NAME, (admin_id, self.bot.name))
+                await self.bot.send_text(
+                    self.user_id,
+                    text=(
+                        f"Пользователь @[{admin_id}] удален из списка администраторов бота."
+                    )
                 )
-            )
-        else:
-            await self.bot.send_text(
-                self.user_id,
-                text=(
-                    f"Пользователь @[{admin_id}] удален из списка администраторов бота."
+            else:
+                await self.bot.send_text(
+                    self.user_id,
+                    text=(
+                        f"Не удалось удалить админа @[{admin_id}]"
+                    )
                 )
-            )
+        except DatabaseError as e:
+            log.error(e)
+
         await self.callback_config_reply()
 
     async def reply_disable(self):

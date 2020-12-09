@@ -39,8 +39,8 @@ async def start(bot, event):
         USER_SPACE_NAME, '', '', ''
     ))
     inline_keyboard = [
-            [{"text": "🤖 Инструкция @metabot", "callbackData": "call_back_instruction"}]
-        ]
+        [{"text": "🤖 Инструкция @metabot", "callbackData": "call_back_instruction"}]
+    ]
     await bot.send_text(
         chat_id=user,
         text=(
@@ -167,54 +167,31 @@ async def start_inline_message(bot, event):
                 button_action = 'enable'
                 message_active = f'Включить бота можно командой /on или по кнопке "{button}"'
 
-            icq_channel = select_index(BOT_SPACE_NAME, bot_name, index='bot')[0][-1]
-            if True or icq_channel:
-                await bot.send_text(
-                    chat_id=user_id,
-                    text=(
-                        f"Привет, я твой бот объявлений. Мой никнейм @{bot_name}\n\n"
-                        "1) Чтобы настроить группу или канал для постинга объявлений, нажми \"Настроить объявления\"\n"
-                        "2) Чтобы добавить или удалить админов,"
-                        " которые могут публиковать объявления, нажми \"Настроить админов\"\n"
-                        f"3) @{message_active}\n"
-                        "4) Для публикации объявления просто пошли мне\n"
-                        "5) Для редактирования объявления пришли в меня оригинальное сообщение из группы или канала\n\n"
-                        "Возможности бота объявлений:\n"
-                        "- Единый способ публикации объявлений в группу или канал\n"
-                        "- Отслеживание истории изменений объявлений (все админы увидят, кто поменял объявление)"
-                    ),
-                    inline_keyboard_markup=json.dumps([
-                        [{"text": "Настроить объявления", "callbackData": "callback_check_icq_channel"}],
-                        [{"text": "Настроить админов", "callbackData": "callback_config_reply"}],
-                        [{"text": f"{button}", "callbackData": f"callback_switch_inline-{button_action}"}],
-                    ])
-                )
-            else:
-                await callback_middleware_inline_bot(
-                    bot,
-                    user_id,
-                    'callback_add_new_icq_channels',
-                    None,
-                    bot_callbacks=main_bot_callbacks,
-                    event=event
-                )
-
-        else:
-            is_anon = False
-            try:
-                _, _, is_anon = select(INLINE_USER_SETUP_SPACE_NAME, user_id)[0]
-            except IndexError:
-                replace(INLINE_USER_SETUP_SPACE_NAME, (
-                    user_id, bot_name, is_anon
-                ))
-            text = f"Отправить {'не ' if not is_anon else ''}анонимно"
-            callback = f"callback_switch_anonymous-{is_anon}"
             await bot.send_text(
                 chat_id=user_id,
-                text=util.get_hello_message(bot_name),
+                text=(
+                    f"Привет, я твой бот объявлений. Мой никнейм @{bot_name}\n\n"
+                    "1) Чтобы настроить группу или канал для постинга объявлений, нажми \"Настроить объявления\"\n"
+                    "2) Чтобы добавить или удалить админов,"
+                    " которые могут публиковать объявления, нажми \"Настроить админов\"\n"
+                    f"3) @{message_active}\n"
+                    "4) Для публикации объявления просто пошли мне\n"
+                    "5) Для редактирования объявления пришли в меня оригинальное сообщение из группы или канала\n\n"
+                    "Возможности бота объявлений:\n"
+                    "- Единый способ публикации объявлений в группу или канал\n"
+                    "- Отслеживание истории изменений объявлений (все админы увидят, кто поменял объявление)"
+                ),
                 inline_keyboard_markup=json.dumps([
-                    [{"text": text, "callbackData": callback}],
+                    [{"text": "Настроить объявления", "callbackData": "callback_check_icq_channel"}],
+                    [{"text": "Настроить админов", "callbackData": "callback_config_reply"}],
+                    [{"text": f"{button}", "callbackData": f"callback_switch_inline-{button_action}"}],
                 ])
+            )
+        else:
+            await bot.send_text(
+                chat_id=user_id,
+                text="Привет. Этот бот позволяет отправлять объявления в привязанный канал или группу. "
+                     "К сожалению, эта функция доступна только для администраторов бота."
             )
     except IndexError:
         log.error("Ошибка получения стартового сообщения встроенного бота")
@@ -273,9 +250,9 @@ async def message_inline(bot, event):
                     await text_middleware_inline_bot(
                         bot, user_id, message_id, quiz, text=text, step=step
                     )
-                elif callback_middleware_inline_bot.is_edit_admin_enabled():
+                elif callback_middleware_inline_bot.is_edit_admin_enabled(user_id):
                     await callback_middleware_inline_bot.edit_admin(event.data)
-                elif callback_middleware_inline_bot.is_edit_msg_enabled():
+                elif callback_middleware_inline_bot.is_edit_msg_enabled(user_id):
                     await callback_middleware_inline_bot.edit_message(event.data)
                 elif not util.get_bot_channel(bot_name):
                     await bot.send_text(

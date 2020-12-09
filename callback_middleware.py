@@ -556,7 +556,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             response = await self.bot.get_chat_info(admin[0])
             if response.get("ok"):
                 if response.get('type') == 'private':
-                    admin_list_text += f"{admin_list_index}) @{response.get('nick') or admin[0]}\n"
+                    admin_list_text += f"{admin_list_index}) @[{admin[0]}]\n"
                     admin_list_index += 1
         await self.bot.send_text(
             self.user_id,

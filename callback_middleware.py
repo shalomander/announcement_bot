@@ -740,7 +740,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 for admin in admins:
                     await self.bot.send_text(
                         chat_id=admin,
-                        text=f"Админ @{self.user_id} опубликовал объявление",
+                        text=f"Админ @[{self.user_id}] опубликовал объявление",
                         forward_chat_id=msg_sender,
                         forward_msg_id=msg_id
                     )

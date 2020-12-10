@@ -7,12 +7,9 @@ from callback_middleware import (
 from config import (
     ADMIN_SPACE_NAME,
     USER_SPACE_NAME,
-    BOT_SPACE_NAME,
-    INLINE_USER_SETUP_SPACE_NAME
 )
 from tarantool_utils import (
-    replace, select_index, exist_index,
-    select
+    replace, select_index, exist_index
 )
 from text_middleware import (
     text_middleware_inline_bot

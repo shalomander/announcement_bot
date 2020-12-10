@@ -37,7 +37,7 @@ class InlineAnnouncementBot:
     def __init__(self, token, name, user_id, **kwargs):
         self.TOKEN = token
         self.NAME = name
-        self.owner_id=user_id
+        self.owner_id = user_id
         self.loop = kwargs['loop'] if 'loop' in kwargs else asyncio.get_event_loop()
         self.bot = Bot(
             token=self.TOKEN,

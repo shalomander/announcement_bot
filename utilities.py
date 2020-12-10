@@ -146,7 +146,8 @@ def parse_callback_name(callback: str):
 def str_to_bool(s: str) -> bool:
     false_strings = [
         '0',
-        'false'
+        'false',
+        'disable'
     ]
     return s.lower() not in false_strings
 
@@ -212,8 +213,3 @@ def is_fwd_from_channel(bot, event):
         if message_data[0][6] == icq_channel:
             is_fwd = True
     return is_fwd
-
-
-def str_to_bool(s: str) -> bool:
-    false_list = ['disable']
-    return s not in false_list

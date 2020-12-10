@@ -4,7 +4,6 @@ import logging
 from tarantool.error import DatabaseError
 
 from config import (
-    BOT_NAME,
     BOT_SPACE_NAME,
     USER_SPACE_NAME,
     ADMIN_SPACE_NAME,
@@ -437,7 +436,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         """
         response = await self.bot.get_chat_info(new_admin_id)
         if response.get("ok"):
-            username = response.get('nick') or new_admin_id
+            # username = response.get('nick') or new_admin_id
             try:
                 insert(ADMIN_SPACE_NAME, (
                     new_admin_id, self.bot.name, True, '', 0, ''
@@ -500,7 +499,8 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             self.user_id,
             text=(
                 "Ошибка настройки пересылки.\n\n"
-                f"Проверьте что ссылка валидна и что бот @{self.bot.name} добавлен в группу и имеет право писать туда.\n"
+                f"Проверьте, что ссылка валидна и что бот @{self.bot.name} "
+                "добавлен в группу и имеет право писать туда.\n"
             ),
             inline_keyboard_markup=json.dumps([
                 [{"text": "Повторить", "callbackData": "reply_add_group"}],
@@ -515,7 +515,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         """
         try:
             if len(select(ADMIN_SPACE_NAME, (admin_id, self.bot.name))):
-                result = delete(ADMIN_SPACE_NAME, (admin_id, self.bot.name))
+                delete(ADMIN_SPACE_NAME, (admin_id, self.bot.name))
                 await self.bot.send_text(
                     self.user_id,
                     text=(

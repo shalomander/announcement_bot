@@ -259,7 +259,7 @@ async def message_inline(bot, event):
                         text="⚠️ Чтобы в группу или канал начали публиковаться объявления,"
                              " нужно сначала его настроить",
                         inline_keyboard_markup=json.dumps([
-                            [{"text": "Настроить объявления", "callbackData": f"callback_check_icq_channel"}]
+                            [{"text": "Настроить объявления", "callbackData": "callback_check_icq_channel"}]
                         ])
                     )
                 else:

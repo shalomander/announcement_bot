@@ -526,7 +526,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 await self.bot.send_text(
                     self.user_id,
                     text=(
-                        f"Не удалось удалить админа @[{admin_id}]"
+                        f"Пользователь @[{admin_id}] не является администратором этого бота"
                     )
                 )
         except DatabaseError as e:

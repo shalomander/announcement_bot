@@ -231,13 +231,15 @@ async def message_inline(bot, event):
     :param bot: Объект бота
     :param event: Объект события
     """
-
     bot_name = bot.name
-
     user_id = event.data['from']['userId']
     message_id = event.data['msgId']
     text = event.data['text'] if 'text' in event.data else ''
     is_admin = util.is_admin(user_id, bot_name)
+
+    if event.from_chat != user_id:
+        return
+
     if not text.startswith("/"):
         if is_admin:
             try:

@@ -513,6 +513,21 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         Удаление админа
         :return:
         """
+        admins = util.get_admin_uids(self.bot.name)
+        if self.user_id not in admins:
+            return await self.bot.send_text(
+                self.user_id,
+                text=(
+                    f"Вы не являетесь администратором этого бота"
+                )
+            )
+        if self.user_id == admin_id:
+            return await self.bot.send_text(
+                self.user_id,
+                text=(
+                    f"Вы не можете удалить себя из списка администраторов."
+                )
+            )
         try:
             if len(select(ADMIN_SPACE_NAME, (admin_id, self.bot.name))):
                 delete(ADMIN_SPACE_NAME, (admin_id, self.bot.name))

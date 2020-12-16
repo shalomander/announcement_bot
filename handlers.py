@@ -281,44 +281,34 @@ async def message_inline(bot, event):
             )
 
 
-async def on_bot_for_admin(bot, event):
+async def bot_enable(bot, event):
     """
     Включение бота для администратора
     :param bot:
     :param event:
     :return:
     """
+    util.switch_inline_status(bot.token, True)
     await sub_on_off(bot, event)
 
 
-async def off_bot_for_admin(bot, event):
+async def bot_disable(bot, event):
     """
     Выключение бота для администратора
     :param bot:
     :param event:
     :return:
     """
+    util.switch_inline_status(bot.token, False)
     await sub_on_off(bot, event)
 
 
 async def sub_on_off(bot, event):
-    bot_name = bot.name
     user_id = event.data['from']['userId']
-
-    is_admin = exist_index(
-        ADMIN_SPACE_NAME, (
-            user_id, bot_name
-        ), index='admin_bot'
-    )
-
-    if is_admin:
-        messages = util.switch_admin_status(
-            user_id, bot_name
-        )
-
-        await bot.send_text(
+    is_active = util.is_bot_active(bot.token)
+    await bot.send_text(
             chat_id=user_id,
-            text=f"Бот теперь {messages}",
+            text=f"Бот теперь {'активен' if is_active else 'не активен'}",
             inline_keyboard_markup=json.dumps([
                 [{"text": "Назад", "callbackData": "start_inline_message"}],
             ])

@@ -53,11 +53,11 @@ class InlineAnnouncementBot:
         )
 
         self.bot.dispatcher.add_handler(
-            CommandHandler(callback=handlers.off_bot_for_admin, command='off')
+            CommandHandler(callback=handlers.bot_disable, command='off')
         )
 
         self.bot.dispatcher.add_handler(
-            CommandHandler(callback=handlers.on_bot_for_admin, command='on')
+            CommandHandler(callback=handlers.bot_enable, command='on')
         )
 
         self.bot.dispatcher.add_handler(

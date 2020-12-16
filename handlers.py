@@ -251,8 +251,9 @@ async def message_inline(bot, event):
                     )
                 elif callback_middleware_inline_bot.is_edit_admin_enabled(user_id):
                     await callback_middleware_inline_bot.edit_admin(event.data)
-                elif callback_middleware_inline_bot.is_edit_msg_enabled(user_id):
-                    await callback_middleware_inline_bot.edit_message(event.data)
+                # elif callback_middleware_inline_bot.is_edit_msg_enabled(user_id):
+                #     await callback_middleware_inline_bot.edit_message(event.data)
+                #     await callback_middleware_inline_bot.callback_reply_message(bot, event)
                 elif not util.get_bot_channel(bot_name):
                     await bot.send_text(
                         chat_id=user_id,

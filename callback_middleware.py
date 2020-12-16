@@ -45,15 +45,19 @@ class CallBackMiddlewareBase(ABC):
         self.callback_name = callback_data['callback']
         self.query_id = query_id
         self.kwargs = kwargs
+        self.callback_params = []
         self.callback_params = callback_data['params']
         self.event = self.kwargs['event'].data if 'event' in self.kwargs else None
         self.event_data = self.kwargs['event'].data if 'event' in self.kwargs else []
         self.username = util.extract_username(self.event_data) if self.event_data else None
         if self.user_id in self.edit_admin_mode:
             self.edit_admin_mode.pop(self.user_id)
+        if self.user_id in self.edit_message_mode:
+            self.edit_message_mode.pop(self.user_id)
         print()
         try:
             coro = await getattr(self, self.callback_name)()
+            self.callback_params = []
             await self.set_null_callback() if not coro else await coro
         except AttributeError as e:
             log.error(f"AttributeError in callback_middleware: {e}")
@@ -823,11 +827,11 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             pass
 
     async def callback_edit_fwd(self):
-        control_msg_id = self.callback_params[0]
-        message_id = self.callback_params[1]
-        self.edit_message_mode[self.user_id] = [message_id, control_msg_id]
+        post_id = self.callback_params[0]
+        message_data = select_index('messages', post_id, 'post')
+        self.edit_message_mode[self.user_id] = post_id
         inline_keyboard = [
-            [{"text": "Назад", "callbackData": f"callback_reply_message-{message_id}"}],
+            [{"text": "Назад", "callbackData": f"callback_reply_message-{post_id}"}]
         ]
         await self.bot.send_text(
             chat_id=self.user_id,
@@ -836,13 +840,14 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         )
 
     async def edit_message(self, event_data):
-        old_message_id, control_msg_id = self.edit_message_mode.pop(self.user_id)
+        old_message_id = self.edit_message_mode.pop(self.user_id)
         new_message_id = event_data['msgId']
         inline_keyboard = [
             [{"text": "Опубликовать правки", "callbackData": f"callback_update_post-{old_message_id}"}],
-            [{"text": "Опубликовать\nкак новое", "callbackData": f"callback_send_post-{new_message_id}"}],
+            [{"text": "Опубликовать как новое", "callbackData": f"callback_send_post-{new_message_id}"}],
             [{"text": "Назад", "callbackData": f"callback_reply_message-{old_message_id}"}],
         ]
+
         await self.bot.send_text(
             chat_id=self.user_id,
             reply_msg_id=new_message_id,
@@ -851,42 +856,48 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         )
 
     async def callback_update_post(self):
-        update_message_id = self.callback_params[0]
-        # control_message_id = self.event_data['message']['msgId']
-        old_text = select('channel_messages', update_message_id)[0][1]
-        text = self.event_data['message']['parts'][0]['payload']['message']['text']
-        # icq_channel = util.get_bot_channel(self.bot.name)
+        post_id = self.callback_params.pop(0)
+        cb_id = self.event['message']['msgId']
+        update_message_data = select_index('messages', post_id, 'post')
+        cb_message_data = select_index('messages', cb_id, 'controls')
+        icq_channel = util.get_bot_channel(self.bot.name)
+        if update_message_data and cb_message_data:
+            message = update_message_data[0]
+            cb_message = cb_message_data[0]
+            old_text = message[1]
+            new_text = cb_message[1]
 
-        # update target message text
-        await self.bot.edit_text(
-            msg_id=update_message_id,
-            text=text
-        )
-
-        upsert('channel_messages', (update_message_id, text), ((1, '=', text),))
-
-        # forward original message to admins
-        admins = util.get_admin_uids(self.bot.name)
-        admins.remove(self.user_id)
-        for admin in admins:
-            await self.bot.send_text(
-                chat_id=admin,
-                forward_chat_id=self.user_id,
-                forward_msg_id=self.event_data['parts'][0]['payload']['message']['msgId'],
-                text=f"Оригинальное сообщение:\n{old_text}"
+            await self.bot.edit_text(
+                chat_id=icq_channel,
+                msg_id=post_id,
+                text=new_text
             )
 
-        # edit replied message
-        replied_id = self.event_data['message']['msgId']
-        inline_keyboard = [
-            [{"text": "Закрепить в чате?", "callbackData": f"callback_pin_msg-{update_message_id}"}],
-            [{"text": "Готово", "callbackData": f"callback_disable_buttons-{replied_id}"}],
-        ]
-        self.bot.edit_text(
-            msg_id=replied_id,
-            text="Опубликовано! Уведомление о публикации отправлено всем админам",
-            inline_keyboard_markup=json.dumps(inline_keyboard)
-        )
+            update('messages', message[0], (('=', 1, new_text),))
+
+            # forward original message to admins
+            admins = util.get_admin_uids(self.bot.name)
+            admins.remove(self.user_id)
+            for admin in admins:
+                await self.bot.send_text(
+                    chat_id=admin,
+                    forward_chat_id=self.user_id,
+                    forward_msg_id=self.event_data['parts'][0]['payload']['message']['msgId'],
+                    text=f"Оригинальное сообщение:\n{old_text}"
+                )
+
+            # edit replied message
+            replied_id = self.event_data['message']['msgId']
+            inline_keyboard = [
+                [{"text": "Закрепить в чате?", "callbackData": f"callback_pin_msg-{post_id}"}],
+                [{"text": "Готово", "callbackData": f"callback_disable_buttons-{replied_id}"}],
+            ]
+            await self.bot.edit_text(
+                chat_id=self.user_id,
+                msg_id=replied_id,
+                text="Опубликовано! Уведомление о публикации отправлено всем админам",
+                inline_keyboard_markup=json.dumps(inline_keyboard)
+            )
 
     async def callback_pin_msg(self):
         try:
@@ -937,59 +948,67 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             self.bot = bot
             self.event = event
             self.user_id = event.from_chat
-        try:
-            message_id = self.event.data['msgId'] if event else self.callback_params[0]
-            message_text = self.event.text
-            message_chat_id = self.user_id
-            is_fwd = util.is_fwd_from_channel(self.bot, self.event)
-            inline_keyboard = []
-            send_button_text = "Опубликовть"
 
-            if is_fwd:
+        is_callback = len(self.callback_params) > 0
+        message_id = self.event.data['msgId'] if not is_callback else self.callback_params.pop(0)
+        message_text = self.event.text if hasattr(self.event, 'text') else ''
+        message_chat_id = self.user_id
+        is_fwd = is_callback or util.is_fwd_from_channel(self.bot, self.event)
+        is_edit = self.user_id in self.edit_message_mode
+        inline_keyboard = []
+        send_button_text = "Опубликовть"
+
+        if is_fwd:
+            if not is_callback:
                 message_id = util.get_fwd_id(self.event)
                 message_text = util.get_fwd_text(self.event)
                 message_chat_id = util.get_fwd_chat(self.event)
-                inline_keyboard.append([{"text": "Редактировать",
-                                         "callbackData": f"callback_edit_fwd-{message_id}"}])
-                inline_keyboard.append([{"text": "Удалить",
-                                         "callbackData": f"callback_delete_fwd-{message_id}"}])
-                send_button_text = "Продублировать как новое"
+            inline_keyboard.append([{"text": "Редактировать",
+                                     "callbackData": f"callback_edit_fwd-{message_id}"}])
+            inline_keyboard.append([{"text": "Удалить",
+                                     "callbackData": f"callback_delete_fwd-{message_id}"}])
+            send_button_text = "Продублировать как новое"
 
-            inline_keyboard.append([{"text": send_button_text, "callbackData": f"callback_send_post-{message_id}"}])
-            inline_keyboard.append([{"text": "Отмена", "callbackData": f"callback_delete_post-{message_id}"}])
+        if is_edit:
+            edit_message_id = self.edit_message_mode.pop(self.user_id)
+            inline_keyboard.append([{"text": "Опубликовать правки",
+                                     "callbackData": f"callback_update_post-{edit_message_id}"}])
+            send_button_text = "Опубликовать как новое"
 
-            reply_msg = None
-            if is_fwd:
+        inline_keyboard.append([{"text": send_button_text, "callbackData": f"callback_send_post-{message_id}"}])
+        inline_keyboard.append([{"text": "Отмена", "callbackData": f"callback_delete_post-{message_id}"}])
+
+        reply_msg = None
+        if is_fwd:
+            if not is_callback:
                 reply_msg = await self.bot.send_text(
                     chat_id=self.user_id,
                     forward_msg_id=message_id,
                     forward_chat_id=message_chat_id,
                     text=''
                 )
-            else:
-                reply_msg = await self.bot.send_text(
-                    chat_id=self.user_id,
-                    reply_msg_id=message_id,
-                    text=''
-                )
-            controls_msg = await self.bot.send_text(
+        else:
+            reply_msg = await self.bot.send_text(
                 chat_id=self.user_id,
-                text="Что сделать с объявлением",
-                inline_keyboard_markup=json.dumps(inline_keyboard)
+                reply_msg_id=message_id,
+                text=''
             )
-            if reply_msg.get('ok') and controls_msg.get('ok'):
-                reply_id = reply_msg['msgId']
-                controls_id = controls_msg['msgId']
-                insert('messages', (message_id,
-                                    message_text,
-                                    self.user_id,
-                                    reply_id,
-                                    controls_id,
-                                    '',
-                                    '')
-                       )
-        except IndexError as e:
-            log.error(e)
+        controls_msg = await self.bot.send_text(
+            chat_id=self.user_id,
+            text="Что сделать с объявлением",
+            inline_keyboard_markup=json.dumps(inline_keyboard)
+        )
+        if reply_msg and reply_msg.get('ok') and controls_msg.get('ok'):
+            reply_id = reply_msg['msgId']
+            controls_id = controls_msg['msgId']
+            insert('messages', (message_id,
+                                message_text,
+                                self.user_id,
+                                reply_id,
+                                controls_id,
+                                '',
+                                '')
+                   )
 
 
 callback_middleware_inline_bot = CallBackMiddlewareInlineBot()

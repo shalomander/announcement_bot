@@ -956,7 +956,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         is_fwd = is_callback or util.is_fwd_from_channel(self.bot, self.event)
         is_edit = self.user_id in self.edit_message_mode
         inline_keyboard = []
-        send_button_text = "Опубликовть"
+        send_button_text = "Опубликовать"
 
         if is_fwd:
             if not is_callback:

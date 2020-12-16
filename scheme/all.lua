@@ -178,3 +178,12 @@ box.once("create_v0.0.2", function()
 
 end
 )
+box.once("create_v0.0.3", function()
+    box.space.bots:create_index('token', {
+        type = 'TREE',
+        parts = {'bot_token'},
+        if_not_exists = true,
+        unique=true
+    })
+end
+)

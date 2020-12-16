@@ -83,17 +83,18 @@ def switch_admin_status(user_id, bot_name) -> str:
         return "не активен" if is_admin_active else "активен"
 
 
-def switch_inline_status(bot_name, status: bool = None):
-    admins = get_bot_admins(bot_name)
-    if len(admins) > 0:
-        is_active = is_admin_active(
-            admins[0], bot_name
-        )
-        for admin in admins:
-            # switch current status or set it from arg
-            tarantool.update(ADMIN_SPACE_NAME,
-                             (admin, bot_name),
-                             (('=', 2, status if status is not None else not is_active),))
+def switch_inline_status(token, status: bool = None):
+    bot_data = tarantool.select_index(BOT_SPACE_NAME, token, 'token')
+    if bot_data:
+        bot = bot_data[0]
+        new_status = status if status is not None else not bot[5]
+        tarantool.update(BOT_SPACE_NAME, (bot[0], bot[1]), (('=', 4, new_status),))
+        return new_status
+
+
+def is_bot_active(token):
+    bot_data = tarantool.select_index(BOT_SPACE_NAME, token, 'token')
+    return bot_data[0][4] if bot_data else False
 
 
 def get_bot_admins(bot_name):

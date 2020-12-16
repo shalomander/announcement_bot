@@ -194,14 +194,12 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         :return:
         """
         new_bot_state = self.callback_params[0] if len(self.callback_params) else None
-        util.switch_inline_status(self.bot.name, util.str_to_bool(new_bot_state))
+        util.switch_inline_status(self.bot.token, util.str_to_bool(new_bot_state))
         msg_id = self.event['message']['msgId']
         chat_id = self.event['message']['chat']['chatId']
         msg_text = self.event['message']['text']
         buttons = self.event['message']['parts'][0]['payload']
-        is_active = util.is_admin_active(
-            self.user_id, self.bot.name
-        )
+        is_active = util.is_bot_active(self.bot.token)
 
         if is_active:
             admin_message = f"Админ @{self.username} включил бота"

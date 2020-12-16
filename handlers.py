@@ -249,6 +249,11 @@ async def message_inline(bot, event):
                     await text_middleware_inline_bot(
                         bot, user_id, message_id, quiz, text=text, step=step
                     )
+                elif not util.is_bot_active(bot.token):
+                    await bot.send_text(
+                        chat_id=user_id,
+                        text="Чтобы публиковать объявления, необходимо включить бота"
+                    )
                 elif callback_middleware_inline_bot.is_edit_admin_enabled(user_id):
                     await callback_middleware_inline_bot.edit_admin(event.data)
                 # elif callback_middleware_inline_bot.is_edit_msg_enabled(user_id):

@@ -11,7 +11,7 @@ from config import (
 )
 from response import start_message_inline_bot
 from tarantool_utils import (
-    select, insert, replace, select_index, delete, upsert, update
+    select, insert, replace, select_index, delete, update
 )
 import utilities as util
 
@@ -791,7 +791,6 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
                 text="Вас нет в списке администраторов. Вы не можете публиковать объявления"
             )
 
-
     async def callback_delete_post(self):
         original_msg_id = self.callback_params[0]
         try:
@@ -842,7 +841,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
 
     async def callback_edit_fwd(self):
         post_id = self.callback_params[0]
-        message_data = select_index('messages', post_id, 'post')
+        # message_data = select_index('messages', post_id, 'post')
         self.edit_message_mode[self.user_id] = post_id
         inline_keyboard = [
             [{"text": "Назад", "callbackData": f"callback_reply_message-{post_id}"}]
@@ -922,7 +921,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             icq_channel = util.get_bot_channel(self.bot.name)
 
             # pin target message
-            pin = await self.bot.pin_message(
+            await self.bot.pin_message(
                 chat_id=icq_channel,
                 msg_id=msg_posted
             )

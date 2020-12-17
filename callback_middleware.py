@@ -638,9 +638,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         :return:
         """
         try:
-            icq_channel = select(
-                ADMIN_SPACE_NAME, (self.user_id, self.bot.name)
-            )[0][-1]
+            icq_channel = util.get_bot_channel(self.bot.name)
             response = await self.bot.get_chat_admins(icq_channel)
             if not response.get('ok'):
                 await self.bot.send_text(
@@ -657,7 +655,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             else:
                 util.set_null_admin_tuple(self.user_id, self.bot.name)
                 bot_info = select_index(BOT_SPACE_NAME, self.bot.name, index='bot')[0]
-                bot_info[-1] = icq_channel
+                bot_info[6] = icq_channel
                 replace(BOT_SPACE_NAME, bot_info)
                 await self.bot.send_text(
                     self.user_id,
@@ -737,44 +735,62 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
         Отправка поста в канал
         :return:
         """
-
-        icq_channel = util.get_bot_channel(self.bot.name)
-        original_msg_id = self.callback_params[0]
-        try:
-            msg_id, msg_text, msg_sender, msg_reply, msg_controls, *_ = select('messages', original_msg_id)[0]
-            # send original text to target channel
-            target_msg = await self.bot.send_text(
-                chat_id=icq_channel,
-                text=msg_text
-            )
-            if target_msg.get('ok'):
-                msg_posted = target_msg['msgId']
-                update('messages', msg_id, (('=', 5, msg_posted), ('=', 6, icq_channel)))
-
-                # forward original message to admins
-                admins = util.get_admin_uids(self.bot.name)
-                admins.remove(self.user_id)
-                for admin in admins:
-                    await self.bot.send_text(
-                        chat_id=admin,
-                        text=f"Админ @[{self.user_id}] опубликовал объявление",
-                        forward_chat_id=msg_sender,
-                        forward_msg_id=msg_id
-                    )
-
-                # edit controls message
-                inline_keyboard = [
-                    [{"text": "Закрепить в чате?", "callbackData": f"callback_pin_msg-{msg_posted}"}],
-                    [{"text": "Готово", "callbackData": f"callback_disable_buttons-{msg_controls}"}],
-                ]
-                await self.bot.edit_text(
-                    chat_id=msg_sender,
-                    msg_id=msg_controls,
-                    text="Опубликовано! Уведомление о публикации отправлено всем админам",
-                    inline_keyboard_markup=json.dumps(inline_keyboard)
+        if util.is_admin(self.user_id, self.bot.name):
+            icq_channel = util.get_bot_channel(self.bot.name)
+            response = await self.bot.get_chat_admins(icq_channel)
+            if not response.get('ok'):
+                util.set_bot_channel(self.user_id, self.bot.token)
+                await self.bot.send_text(
+                    chat_id=self.user_id,
+                    text="⚠️ Чтобы в группу или канал начали публиковаться объявления,"
+                         " нужно сначала его настроить",
+                    inline_keyboard_markup=json.dumps([
+                        [{"text": "Настроить объявления", "callbackData": "callback_check_icq_channel"}]
+                    ])
                 )
-        except IndexError as e:
-            log.error(e)
+            else:
+                original_msg_id = self.callback_params[0]
+                try:
+                    msg_id, msg_text, msg_sender, msg_reply, msg_controls, *_ = select('messages', original_msg_id)[0]
+                    # send original text to target channel
+                    target_msg = await self.bot.send_text(
+                        chat_id=icq_channel,
+                        text=msg_text
+                    )
+                    if target_msg.get('ok'):
+                        msg_posted = target_msg['msgId']
+                        update('messages', msg_id, (('=', 5, msg_posted), ('=', 6, icq_channel)))
+
+                        # forward original message to admins
+                        admins = util.get_admin_uids(self.bot.name)
+                        admins.remove(self.user_id)
+                        for admin in admins:
+                            await self.bot.send_text(
+                                chat_id=admin,
+                                text=f"Админ @[{self.user_id}] опубликовал объявление",
+                                forward_chat_id=msg_sender,
+                                forward_msg_id=msg_id
+                            )
+
+                        # edit controls message
+                        inline_keyboard = [
+                            [{"text": "Закрепить в чате?", "callbackData": f"callback_pin_msg-{msg_posted}"}],
+                            [{"text": "Готово", "callbackData": f"callback_disable_buttons-{msg_controls}"}],
+                        ]
+                        await self.bot.edit_text(
+                            chat_id=msg_sender,
+                            msg_id=msg_controls,
+                            text="Опубликовано! Уведомление о публикации отправлено всем админам",
+                            inline_keyboard_markup=json.dumps(inline_keyboard)
+                        )
+                except IndexError as e:
+                    log.error(e)
+        else:
+            await self.bot.send_text(
+                chat_id=self.user_id,
+                text="Вас нет в списке администраторов. Вы не можете публиковать объявления"
+            )
+
 
     async def callback_delete_post(self):
         original_msg_id = self.callback_params[0]
@@ -906,7 +922,7 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             icq_channel = util.get_bot_channel(self.bot.name)
 
             # pin target message
-            await self.bot.pin_message(
+            pin = await self.bot.pin_message(
                 chat_id=icq_channel,
                 msg_id=msg_posted
             )
@@ -917,9 +933,9 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             for admin in admins:
                 await self.bot.send_text(
                     chat_id=admin,
-                    forward_chat_id=msg_sender,
+                    forward_chat_id=icq_channel,
                     forward_msg_id=msg_posted,
-                    text=f"Сообщение закреплено админом @{self.username}"
+                    text=f"Aдмин @[{self.user_id}] закрепил сообщение в чате"
                 )
 
             # edit controls in replied message

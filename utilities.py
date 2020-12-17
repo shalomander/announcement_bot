@@ -84,17 +84,20 @@ def switch_admin_status(user_id, bot_name) -> str:
 
 
 def switch_inline_status(token, status: bool = None):
-    bot_data = tarantool.select_index(BOT_SPACE_NAME, token, 'token')
+    bot_data = tarantool.select_index('bot_activity', token, 'bot')
     if bot_data:
         bot = bot_data[0]
-        new_status = status if status is not None else not bot[5]
-        tarantool.update(BOT_SPACE_NAME, (bot[0], bot[1]), (('=', 4, new_status),))
+        new_status = status if status is not None else not bot[1]
+        tarantool.update('bot_activity', token, (('=', 1, new_status),))
         return new_status
+    else:
+        tarantool.insert('bot_activity', (token, True))
+        return True
 
 
 def is_bot_active(token):
-    bot_data = tarantool.select_index(BOT_SPACE_NAME, token, 'token')
-    return bot_data[0][4] if bot_data else False
+    bot_data = tarantool.select_index('bot_activity', token, 'bot')
+    return bot_data[0][1] if bot_data else switch_inline_status(token, True)
 
 
 def get_bot_admins(bot_name):
@@ -183,7 +186,11 @@ def get_admin_uids(bot_name):
 
 def get_bot_channel(bot_name):
     bot_data = tarantool.select_index(BOT_SPACE_NAME, bot_name, index='bot')
-    return bot_data[0][6] if len(bot_data) else None
+    return bot_data[0][6] if len(bot_data) and bot_data[0][6] else None
+
+
+def set_bot_channel(uid, token, channel=''):
+    tarantool.update(BOT_SPACE_NAME, (uid, token), (('=', 6, channel),))
 
 
 def has_parts(event):

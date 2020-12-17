@@ -187,3 +187,19 @@ box.once("create_v0.0.3", function()
     })
 end
 )
+box.once("create_v0.0.5", function()
+    box.schema.space.create('bot_activity', {
+        if_not_exists = true,
+        format={
+             {name = 'token', type = 'string'},
+             {name = 'status', type = 'boolean'},
+        }
+    })
+    box.space.bot_activity:create_index('bot', {
+        type = 'hash',
+        parts = {'token'},
+        if_not_exists = true,
+        unique=true
+    })
+end
+)

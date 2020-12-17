@@ -235,6 +235,7 @@ async def message_inline(bot, event):
     is_admin = util.is_admin(user_id, bot_name)
 
     if event.from_chat != user_id:
+
         return
 
     if not text.startswith("/"):

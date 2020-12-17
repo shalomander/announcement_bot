@@ -520,14 +520,14 @@ class CallBackMiddlewareInlineBot(CallBackMiddlewareBase):
             return await self.bot.send_text(
                 self.user_id,
                 text=(
-                    f"Вы не являетесь администратором этого бота"
+                    "Вы не являетесь администратором этого бота"
                 )
             )
         if self.user_id == admin_id:
             return await self.bot.send_text(
                 self.user_id,
                 text=(
-                    f"Вы не можете удалить себя из списка администраторов."
+                    "Вы не можете удалить себя из списка администраторов."
                 )
             )
         try:

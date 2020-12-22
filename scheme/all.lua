@@ -187,6 +187,7 @@ box.once("create_v0.0.3", function()
     })
 end
 )
+
 box.once("create_v0.0.5", function()
     box.schema.space.create('bot_activity', {
         if_not_exists = true,
@@ -198,6 +199,22 @@ box.once("create_v0.0.5", function()
     box.space.bot_activity:create_index('bot', {
         type = 'hash',
         parts = {'token'},
+        if_not_exists = true,
+        unique=true
+    })
+end
+)
+box.once("create_v0.0.6", function()
+    box.schema.space.create('wait_user_for', {
+        if_not_exists = true,
+        format={
+             {name = 'user_id', type = 'string'},
+             {name = 'action', type = 'string'},
+        }
+    })
+    box.space.wait_user_for:create_index('wait_for', {
+        type = 'hash',
+        parts = {'user_id'},
         if_not_exists = true,
         unique=true
     })

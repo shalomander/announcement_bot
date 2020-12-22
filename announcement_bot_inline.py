@@ -6,7 +6,7 @@ from asyncio import Task
 from config import (
     BOT_SPACE_NAME, config
 )
-import tarantool_utils as tarantool
+import db
 from mailru_im_async_bot.handler import (
     CommandHandler, BotButtonCommandHandler, MessageHandler
 )
@@ -93,13 +93,13 @@ class InlineAnnouncementBot:
         :param status: Новый статус для бота
         :return: None
         """
-        bot = tarantool.select_index(BOT_SPACE_NAME, self.NAME, index='bot')[0]
-        bot[4] = status
-        tarantool.replace(BOT_SPACE_NAME, bot)
+        bot_data = util.get_bot_data(self.NAME)
+        bot_data[4] = status
+        db.replace(BOT_SPACE_NAME, bot_data)
 
     async def check_token(self):
         if not await util.validate_token(self.TOKEN):
-            tarantool.delete(config.BOT_SPACE_NAME, (self.owner_id, self.TOKEN))
+            db.delete(config.BOT_SPACE_NAME, (self.owner_id, self.TOKEN))
 
     async def _run_tasks(self):
         while self.is_running:

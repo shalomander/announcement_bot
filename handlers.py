@@ -1,23 +1,16 @@
 import json
 import logging
-from callback_middleware import (
-    callback_middleware, callback_middleware_inline_bot,
-)
+import callback
 
 from config import (
     ADMIN_SPACE_NAME,
     USER_SPACE_NAME,
 )
-from tarantool_utils import (
-    replace, select_index, exist_index
-)
-from text_middleware import (
-    text_middleware_inline_bot
-)
 import utilities as util
-
+import db
 log = logging.getLogger(__name__)
 main_bot_callbacks = {}
+cb_processor = callback.CallbackProcessor()
 
 
 async def start(bot, event):
@@ -31,12 +24,8 @@ async def start(bot, event):
 
     # Получение пользователя
     user = event.data['from']['userId']
-
-    replace(USER_SPACE_NAME, (
-        USER_SPACE_NAME, '', '', ''
-    ))
     inline_keyboard = [
-        [{"text": "🤖 Инструкция @metabot", "callbackData": "call_back_instruction"}]
+        [{"text": "🤖 Инструкция @metabot", "callbackData": "instruction"}]
     ]
     await bot.send_text(
         chat_id=user,
@@ -74,16 +63,9 @@ async def callbacks(bot, event):
             show_alert=False
         )
         await start(bot, event)
-
     else:
-        await callback_middleware(
-            bot,
-            user,
-            callback_name,
-            event.data['queryId'],
-            bot_callbacks=main_bot_callbacks,
-            event=event
-        )
+        cb_event = await callback.UserEvent.init(bot, event)
+        await cb_processor(cb_event)
 
 
 async def message(bot, event):
@@ -106,7 +88,7 @@ async def message(bot, event):
         secret_bot = util.parse_bot_info(text)
         if 'token' in secret_bot:
             if await util.validate_token(secret_bot['token']):
-                replace(USER_SPACE_NAME, (
+                db.replace(USER_SPACE_NAME, (
                     user,
                     secret_bot['token'], secret_bot['botId'], secret_bot['nick']
                 ))
@@ -115,7 +97,7 @@ async def message(bot, event):
                     reply_msg_id=message_id,
                     text="Подключить бота?",
                     inline_keyboard_markup=json.dumps([
-                        [{"text": "Подключить", "callbackData": "call_back_bot_connect"}],
+                        [{"text": "Подключить", "callbackData": "connect_bot"}],
                         [{"text": "Отмена", "callbackData": "callback_start"}],
                     ])
                 )
@@ -132,94 +114,13 @@ async def message(bot, event):
 # Inline bot
 
 async def start_inline_message(bot, event):
-    """
-    Приветственное сообщение для встроенного бота
-    :param bot:
-    :param event:
-    :return:
-    """
-
-    try:
-        bot_name = bot.name
-        user_id = event.data['from']['userId']
-        is_admin = exist_index(
-            ADMIN_SPACE_NAME, (
-                user_id, bot_name
-            ), index='admin_bot'
-        )
-
-        if is_admin:
-            util.set_null_admin_tuple(
-                user_id, bot_name
-            )
-            is_active = util.is_admin_active(
-                user_id, bot_name
-            )
-            if is_active:
-                button = "⛔ ️Выключить"
-                button_action = 'disable'
-                message_active = f'Остановить бота можно командой /off или по кнопке "{button}"'
-            else:
-                button = "Включить"
-                button_action = 'enable'
-                message_active = f'Включить бота можно командой /on или по кнопке "{button}"'
-
-            await bot.send_text(
-                chat_id=user_id,
-                text=(
-                    f"Привет, я твой бот объявлений. Мой никнейм @{bot_name}\n\n"
-                    "1) Чтобы настроить группу или канал для постинга объявлений, нажми \"Настроить объявления\"\n"
-                    "2) Чтобы добавить или удалить админов,"
-                    " которые могут публиковать объявления, нажми \"Настроить админов\"\n"
-                    f"3) @{message_active}\n"
-                    "4) Для публикации объявления просто пришли мне его текст\n"
-                    "5) Для редактирования объявления перешли в меня оригинальное сообщение из группы или канала\n\n"
-                    "Возможности бота объявлений:\n"
-                    "- Единый способ публикации объявлений в группу или канал\n"
-                    "- Отслеживание истории изменений объявлений (все админы увидят, кто поменял объявление)"
-                ),
-                inline_keyboard_markup=json.dumps([
-                    [{"text": "Настроить объявления", "callbackData": "callback_check_icq_channel"}],
-                    [{"text": "Настроить админов", "callbackData": "callback_config_reply"}],
-                    [{"text": f"{button}", "callbackData": f"callback_switch_inline-{button_action}"}],
-                ])
-            )
-        else:
-            await bot.send_text(
-                chat_id=user_id,
-                text="Привет. Этот бот позволяет отправлять объявления в привязанный канал или группу. "
-                     "К сожалению, эта функция доступна только для администраторов бота."
-            )
-    except IndexError:
-        log.error("Ошибка получения стартового сообщения встроенного бота")
+    cb_event = await callback.UserEvent.init(bot, event)
+    await cb_processor.start_inline_message(cb_event)
 
 
 async def callbacks_inline(bot, event):
-    """
-    Обработка всех фукнций с обратным вызовом внутри бота
-    :param bot: Объект бота
-    :param event: Объект события
-    """
-
-    user = event.data['from']['userId']
-    message_id = event.data['message'].get('msgId')
-    text = event.data['message'].get('text')
-
-    callback_name = event.data['callbackData']
-
-    if callback_name == 'start_inline_message':
-        await bot.answer_callback_query(
-            query_id=event.data['queryId'],
-            text="",
-            show_alert=False
-        )
-        await start_inline_message(bot, event)
-
-    else:
-        await callback_middleware_inline_bot(
-            bot, user, callback_name, event.data['queryId'], message_id=message_id,
-            text=text, event=event
-        )
+    cb_event = await callback.UserEvent.init(bot, event)
+    await cb_processor(cb_event)
 
 
 async def message_inline(bot, event):
@@ -228,6 +129,7 @@ async def message_inline(bot, event):
     :param bot: Объект бота
     :param event: Объект события
     """
+    cb_event = await callback.UserEvent.init(bot, event)
     bot_name = bot.name
     user_id = event.data['from']['userId']
     message_id = event.data['msgId']
@@ -241,25 +143,21 @@ async def message_inline(bot, event):
     if not text.startswith("/"):
         if is_admin:
             try:
-                _, _, _, quiz, step, _ = select_index(
+                _, _, _, quiz, step, _ = db.select_index(
                     ADMIN_SPACE_NAME, (
                         user_id, bot_name
                     ), index='admin_bot'
                 )[0]
                 if quiz:
-                    await text_middleware_inline_bot(
-                        bot, user_id, message_id, quiz, text=text, step=step
-                    )
+                    await cb_processor.set_icq_channel(cb_event)
+                elif cb_event.wait_user_for is not None:
+                    cb_event.callback_name = cb_event.wait_user_for
+                    await cb_processor(cb_event)
                 elif not util.is_bot_active(bot.token):
                     await bot.send_text(
                         chat_id=user_id,
                         text="Чтобы публиковать объявления, необходимо включить бота"
                     )
-                elif callback_middleware_inline_bot.is_edit_admin_enabled(user_id):
-                    await callback_middleware_inline_bot.edit_admin(event.data)
-                # elif callback_middleware_inline_bot.is_edit_msg_enabled(user_id):
-                #     await callback_middleware_inline_bot.edit_message(event.data)
-                #     await callback_middleware_inline_bot.callback_reply_message(bot, event)
                 elif not util.get_bot_channel(bot_name):
                     await bot.send_text(
                         chat_id=user_id,
@@ -270,8 +168,9 @@ async def message_inline(bot, event):
                         ])
                     )
                 else:
+                    await cb_processor.reply_message(cb_event)
                     # reply message with control buttons
-                    await callback_middleware_inline_bot.callback_reply_message(bot, event)
+                    # await callback_middleware_inline_bot.callback_reply_message(bot, event)
 
             except IndexError:
                 pass
@@ -283,24 +182,14 @@ async def message_inline(bot, event):
 
 
 async def bot_enable(bot, event):
-    """
-    Включение бота для администратора
-    :param bot:
-    :param event:
-    :return:
-    """
-    util.switch_inline_status(bot.token, True)
+    cb_event = await callback.UserEvent.init(bot, event)
+    cb_processor.switch_inline(cb_event, True)
     await sub_on_off(bot, event)
 
 
 async def bot_disable(bot, event):
-    """
-    Выключение бота для администратора
-    :param bot:
-    :param event:
-    :return:
-    """
-    util.switch_inline_status(bot.token, False)
+    cb_event = await callback.UserEvent.init(bot, event)
+    cb_processor.switch_inline(cb_event, False)
     await sub_on_off(bot, event)
 
 

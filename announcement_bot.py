@@ -11,13 +11,11 @@ from mailru_im_async_bot.handler import (
 from pid import PidFile
 from pypros.ipros import IncomingRequest
 import config
-from handlers import (
-    start, callbacks, message, main_bot_callbacks
-)
+import handlers
 from announcement_bot_inline import InlineAnnouncementBot
-import tarantool_utils as tarantool
+import db
 import utilities as util
-
+from callback import main_bot_funcs
 log = logging.getLogger(__name__)
 
 file_hash = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'hash')
@@ -39,14 +37,14 @@ bot = Bot(
 inline_bots = {}
 
 bot.dispatcher.add_handler(
-    CommandHandler(callback=start, command='start')
+    CommandHandler(callback=handlers.start, command='start')
 )
 bot.dispatcher.add_handler(
-    BotButtonCommandHandler(callback=callbacks)
+    BotButtonCommandHandler(callback=handlers.callbacks)
 )
 bot.dispatcher.add_handler(
     MessageHandler(
-        callback=message,
+        callback=handlers.message,
     )
 )
 
@@ -64,22 +62,23 @@ def role_change(current, new):
             loop.create_task(start_all())
         else:
             loop.create_task(bot.stop_polling())
-            tarantool.close()
+            db.close()
         log.info(f"role was change from {current} to {new}")
 
 
 async def start_bot(bot_nick, bot_data=None):
-    bot_data = bot_data or tarantool.select_index(config.BOT_SPACE_NAME, bot_nick, index='bot')[0]
-    user_id, bot_token, _, bot_name, *_ = bot_data
-    if await util.validate_token(bot_token):
-        bot_instance = InlineAnnouncementBot(bot_token, bot_name, user_id)
-        bot_instance.start()
-        await update_bot_name(bot_instance.bot)
-        if bot_instance.is_running:
-            log.info(f"Success: {bot_name}\n")
-            inline_bots[bot_name] = bot_instance
-    else:
-        tarantool.delete(config.BOT_SPACE_NAME, (user_id, bot_token))
+    bot_data = bot_data or util.get_bot_data(bot_nick)
+    if bot_data:
+        user_id, bot_token, _, bot_name, *_ = bot_data
+        if await util.validate_token(bot_token):
+            bot_instance = InlineAnnouncementBot(bot_token, bot_name, user_id)
+            bot_instance.start()
+            await update_bot_name(bot_instance.bot)
+            if bot_instance.is_running:
+                log.info(f"Success: {bot_name}\n")
+                inline_bots[bot_name] = bot_instance
+        else:
+            db.delete(config.BOT_SPACE_NAME, (user_id, bot_token))
 
 
 def stop_bot(bot_nick):
@@ -90,7 +89,7 @@ def stop_bot(bot_nick):
 
 async def start_all():
     log.info("\nStarting bots:\n")
-    bots = tarantool.select(config.BOT_SPACE_NAME)
+    bots = db.select(config.BOT_SPACE_NAME)
     for bot_data in bots:
         await start_bot(None, bot_data)
 
@@ -107,8 +106,7 @@ async def update_bot_name(bot_instance: Bot):
     if bot_self.get("ok"):
         bot_instance.name = bot_self.get('nick')
 
-
-main_bot_callbacks['start'] = start_bot
+main_bot_funcs['start'] = start_bot
 
 
 async def process(rq: IncomingRequest):
@@ -148,6 +146,6 @@ with PidFile(config.NAME):
     finally:
         if server:
             server.close()
-        tarantool.close()
+        db.close()
         loop.run_until_complete(pypros.ipros.shutdown())
         loop.close()

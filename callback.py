@@ -1,5 +1,4 @@
 import json
-from abc import ABC
 import logging
 from tarantool.error import DatabaseError
 

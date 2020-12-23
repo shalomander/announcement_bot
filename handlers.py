@@ -14,14 +14,6 @@ cb_processor = callback.CallbackProcessor()
 
 
 async def start(bot, event):
-    """
-    Обработка стартового сообщения
-
-    :param bot: Объект бота
-    :param event: Объект события
-    :return: Текст с информацией о боте
-    """
-
     # Получение пользователя
     user = event.data['from']['userId']
     inline_keyboard = [
@@ -46,16 +38,7 @@ async def start(bot, event):
 
 
 async def callbacks(bot, event):
-    """
-    Обработка всех фукнций с обратным вызовом
-    :param bot: Объект бота
-    :param event: Объект события
-    """
-
-    user = event.data['from']['userId']
-
     callback_name = event.data['callbackData']
-
     if callback_name == 'callback_start':
         await bot.answer_callback_query(
             query_id=event.data['queryId'],
@@ -69,21 +52,14 @@ async def callbacks(bot, event):
 
 
 async def message(bot, event):
-    """
-    Обрабокта сообщений
-    :param bot: Объект бота
-    :param event: Объект события
-    """
     user = event.data['from']['userId']
     message_id = event.data['msgId']
-
     try:
         # Обработка пересланного сообщения с информацией о боте
         text = event.data['parts'][0]['payload']['message']['text']
     except KeyError:
         # Если информацию о боте скопировали
         text = event.data['text']
-
     try:
         secret_bot = util.parse_bot_info(text)
         if 'token' in secret_bot:
@@ -107,12 +83,11 @@ async def message(bot, event):
                     reply_msg_id=message_id,
                     text="Токен недействителен\n"
                 )
-    except KeyError:
-        pass
+    except KeyError as e:
+        log.error(e)
 
 
 # Inline bot
-
 async def start_inline_message(bot, event):
     cb_event = await callback.UserEvent.init(bot, event)
     await cb_processor.start_inline_message(cb_event)
@@ -124,20 +99,13 @@ async def callbacks_inline(bot, event):
 
 
 async def message_inline(bot, event):
-    """
-    Обрабокта текстовых сообщений внутри встроенного бота
-    :param bot: Объект бота
-    :param event: Объект события
-    """
     cb_event = await callback.UserEvent.init(bot, event)
     bot_name = bot.name
     user_id = event.data['from']['userId']
-    message_id = event.data['msgId']
     text = event.data['text'] if 'text' in event.data else ''
     is_admin = util.is_admin(user_id, bot_name)
 
     if event.from_chat != user_id:
-
         return
 
     if not text.startswith("/"):
@@ -169,11 +137,8 @@ async def message_inline(bot, event):
                     )
                 else:
                     await cb_processor.reply_message(cb_event)
-                    # reply message with control buttons
-                    # await callback_middleware_inline_bot.callback_reply_message(bot, event)
-
-            except IndexError:
-                pass
+            except IndexError as e:
+                log.error(e)
         else:
             await bot.send_text(
                 chat_id=user_id,

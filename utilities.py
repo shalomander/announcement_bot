@@ -120,12 +120,12 @@ def change_index_tuple_admin(user_id, bot_name, kwargs) -> None:
 def set_null_admin_tuple(user_id, bot_name) -> None:
     try:
         db.update(ADMIN_SPACE_NAME,
-                         (user_id, bot_name),
-                         (
-                             ('=', 3, ''),
-                             ('=', 4, 0),
-                             ("=", 5, '')
-                         ))
+                  (user_id, bot_name),
+                  (
+                      ('=', 3, ''),
+                      ('=', 4, 0),
+                      ("=", 5, '')
+                  ))
     except IndexError:
         log.error("Невозможно очистить сторонную информаицю администратора")
 

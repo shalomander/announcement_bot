@@ -43,4 +43,3 @@ def update(space_name, key, op_list) -> tuple:
 
 def close():
     return __db.close()
-

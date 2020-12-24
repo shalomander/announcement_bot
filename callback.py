@@ -31,6 +31,8 @@ class UserEvent:
         self.message_text = msg_data['text']
         self.parts = msg_data['parts']
         self.chat_id = msg_data['chat_id']
+        self.command = msg_data['command']
+        self.command_args = msg_data['command_args']
         self.keyboard = []
         self.mentions = []
         self.forwards = []
@@ -67,16 +69,22 @@ class UserEvent:
 
     def _get_message_data(self):
         msg_data = self.event.data
+        command = None
+        command_args = []
         if self.event_type == 'callbackQuery':
             msg_data = self.event.data['message']
         text = msg_data['text'] if 'text' in msg_data else ''
         msg_id = msg_data['msgId']
         parts = msg_data['parts'] if 'parts' in msg_data else []
         chat_id = msg_data['chat']['chatId']
+        if self.event_type == 'newMessage':
+            command, command_args = self._parse_command(text)
         return {'id': msg_id,
                 'text': text,
                 'parts': parts,
-                'chat_id': chat_id}
+                'chat_id': chat_id,
+                'command': command,
+                'command_args': command_args}
 
     def _get_query_id(self):
         return self.event.data['queryId'] if self.event_type == 'callbackQuery' else None
@@ -92,13 +100,24 @@ class UserEvent:
             elif part['type'] == 'file':
                 self.files.append(part['payload'])
 
+    def _parse_command(self, text):
+        text = text.strip(' ')
+        command = None
+        args = []
+        if text.startswith('/'):
+            parts = text.split(' ')
+            if parts:
+                command = parts.pop(0).lstrip('/')
+                args = list(filter(len, parts))
+        return [command, args]
+
 
 class CallbackProcessor:
 
     async def __call__(self, cb_event: UserEvent, **kwargs):
         try:
             coro = await getattr(CallbackProcessor, cb_event.callback_name)(cb_event)
-            await self.set_null_callback(cb_event) if not coro else await coro()
+            await self.set_null_callback(cb_event) if not coro else await coro
         except AttributeError as e:
             log.error(e)
 
@@ -187,7 +206,7 @@ class CallbackProcessor:
             )
 
     @staticmethod
-    async def switch_inline(cb_event, new_state=None):
+    async def switch_inline(cb_event, new_state='enable'):
         new_bot_state = cb_event.callback_params[0] if len(cb_event.callback_params) else new_state
         util.switch_inline_status(cb_event.bot.token, util.str_to_bool(new_bot_state))
         is_active = util.is_bot_active(cb_event.bot.token)
@@ -202,15 +221,25 @@ class CallbackProcessor:
             callback_message = "Бот выключен"
             switch_button_text = 'Включить'
             switch_button_action = 'enable'
-        buttons = cb_event.keyboard
-        buttons[-1] = [
-            {"text": f"{switch_button_text}", "callbackData": f"switch_inline;{switch_button_action}"}]
-        await cb_event.bot.edit_text(
-            chat_id=cb_event.chat_id,
-            msg_id=cb_event.message_id,
-            text=cb_event.message_text,
-            inline_keyboard_markup=json.dumps(buttons)
-        )
+        if cb_event.callback_name and cb_event.keyboard:
+            buttons = cb_event.keyboard
+            buttons[-1] = [
+                {"text": f"{switch_button_text}", "callbackData": f"switch_inline;{switch_button_action}"}]
+            await cb_event.bot.edit_text(
+                chat_id=cb_event.chat_id,
+                msg_id=cb_event.message_id,
+                text=cb_event.message_text,
+                inline_keyboard_markup=json.dumps(buttons)
+            )
+        else:
+            inline_keyboard = [
+                    [{"text": "Назад", "callbackData": "start_inline_message"}],
+                ]
+            await cb_event.bot.send_text(
+                chat_id=cb_event.user_id,
+                text=f"Бот теперь {'активен' if is_active else 'не активен'}",
+                inline_keyboard_markup=json.dumps(inline_keyboard)
+            )
         # send notification to other admins
         admins = util.get_admin_uids(cb_event.bot.name)
         admins.remove(cb_event.user_id)
@@ -219,7 +248,6 @@ class CallbackProcessor:
                 chat_id=admin,
                 text=admin_message
             )
-
         return CallbackProcessor.set_answer_callback(cb_event, callback_message)
 
     @staticmethod

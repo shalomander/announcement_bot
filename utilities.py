@@ -151,7 +151,8 @@ def str_to_bool(s: str) -> bool:
     false_strings = [
         '0',
         'false',
-        'disable'
+        'disable',
+        'off'
     ]
     return s.lower() not in false_strings
 

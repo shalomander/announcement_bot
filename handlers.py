@@ -107,7 +107,6 @@ async def message_inline(bot, event):
 
     if event.from_chat != user_id:
         return
-
     if not text.startswith("/"):
         if is_admin:
             try:
@@ -146,25 +145,6 @@ async def message_inline(bot, event):
             )
 
 
-async def bot_enable(bot, event):
+async def set_state(bot, event):
     cb_event = await callback.UserEvent.init(bot, event)
-    cb_processor.switch_inline(cb_event, True)
-    await sub_on_off(bot, event)
-
-
-async def bot_disable(bot, event):
-    cb_event = await callback.UserEvent.init(bot, event)
-    cb_processor.switch_inline(cb_event, False)
-    await sub_on_off(bot, event)
-
-
-async def sub_on_off(bot, event):
-    user_id = event.data['from']['userId']
-    is_active = util.is_bot_active(bot.token)
-    await bot.send_text(
-            chat_id=user_id,
-            text=f"Бот теперь {'активен' if is_active else 'не активен'}",
-            inline_keyboard_markup=json.dumps([
-                [{"text": "Назад", "callbackData": "start_inline_message"}],
-            ])
-        )
+    await cb_processor.switch_inline(cb_event, cb_event.command)

@@ -351,7 +351,7 @@ class CallbackProcessor:
                     await cb_event.bot.send_text(
                         cb_event.user_id,
                         text=(
-                            f"Пользователь @[{mention['userId']}] назначен дминистратором бота.\n"
+                            f"Пользователь @[{mention['userId']}] назначен администратором бота.\n"
                             f"⚠️ ВАЖНО: пользователь должен САМ открыть @{cb_event.bot.name} и стартовать его, "
                             "чтобы начать получать сообщения"
                         )
@@ -751,7 +751,7 @@ class CallbackProcessor:
             )
         controls_msg = await cb_event.bot.send_text(
             chat_id=cb_event.user_id,
-            text="Что сделать с объявлением",
+            text="Что сделать с объявлением?",
             inline_keyboard_markup=json.dumps(inline_keyboard)
         )
         if reply_msg and reply_msg.get('ok') and controls_msg.get('ok'):

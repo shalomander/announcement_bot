@@ -233,8 +233,8 @@ class CallbackProcessor:
             )
         else:
             inline_keyboard = [
-                    [{"text": "Назад", "callbackData": "start_inline_message"}],
-                ]
+                [{"text": "Назад", "callbackData": "start_inline_message"}],
+            ]
             await cb_event.bot.send_text(
                 chat_id=cb_event.user_id,
                 text=f"Бот теперь {'активен' if is_active else 'не активен'}",
@@ -601,19 +601,34 @@ class CallbackProcessor:
 
     @staticmethod
     async def edit_message(cb_event):
-        old_message_id = cb_event.wait_for_user_params[0]
+        old_message_id = cb_event.wait_user_for_params[0]
         new_message_id = cb_event.message_id
         inline_keyboard = [
             [{"text": "Опубликовать правки", "callbackData": f"update_post;{old_message_id}"}],
             [{"text": "Опубликовать как новое", "callbackData": f"send_post;{new_message_id}"}],
             [{"text": "Назад", "callbackData": f"reply_message;{old_message_id}"}],
         ]
-        await cb_event.bot.send_text(
+        reply_msg = await cb_event.bot.send_text(
             chat_id=cb_event.user_id,
             reply_msg_id=new_message_id,
+            text=""
+        )
+        controls_msg = await cb_event.bot.send_text(
+            chat_id=cb_event.user_id,
             text="Что сделать с исправленным объявлением?",
             inline_keyboard_markup=json.dumps(inline_keyboard)
         )
+        if reply_msg and reply_msg.get('ok') and controls_msg.get('ok'):
+            reply_id = reply_msg['msgId']
+            controls_id = controls_msg['msgId']
+            db.insert('messages', (cb_event.message_id,
+                                   cb_event.message_text,
+                                   cb_event.user_id,
+                                   reply_id,
+                                   controls_id,
+                                   '',
+                                   '')
+                      )
 
     @staticmethod
     async def update_post(cb_event):
@@ -641,7 +656,7 @@ class CallbackProcessor:
                 await cb_event.bot.send_text(
                     chat_id=admin,
                     forward_chat_id=cb_event.user_id,
-                    forward_msg_id=cb_event.forwards[0]['message']['msgId'],
+                    forward_msg_id=cb_message[0],
                     text=f"Оригинальное сообщение:\n{old_text}"
                 )
 
@@ -774,9 +789,9 @@ class CallbackProcessor:
                 '-1': channel_id
             })
             inline_keyboard = [
-                    [{"text": "Подключить", "callbackData": "set_channel_success"}],
-                    [{"text": "Отмена", "callbackData": "start_inline_message"}],
-                ]
+                [{"text": "Подключить", "callbackData": "set_channel_success"}],
+                [{"text": "Отмена", "callbackData": "start_inline_message"}],
+            ]
             await cb_event.bot.send_text(
                 chat_id=cb_event.user_id,
                 reply_msg_id=cb_event.message_id,
